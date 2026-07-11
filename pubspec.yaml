@@ -1,0 +1,25 @@
+name: numberama
+description: A number-matching puzzle game built with Flutter and Flame.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.16.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Flame's effects system (MoveEffect, ScaleEffect, EffectController, ...)
+  # ships inside the core `flame` package as `package:flame/effects.dart` -
+  # there is no separate `flame_effects` package on pub.dev.
+  flame: ^1.18.0
+  flutter_riverpod: ^2.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flame_test: ^2.2.4
+flutter:
+  uses-material-design: true
