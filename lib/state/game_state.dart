@@ -33,8 +33,16 @@ class GameState {
 class GameStateNotifier extends StateNotifier<GameState> {
   GameStateNotifier() : super(const GameState());
 
+  /// Public read of the current phase - `state` itself is `@protected` on
+  /// [StateNotifier], so code outside this class (e.g. [NumberamaGame]'s
+  /// auto-row timer, deciding whether to still act) can't read it directly.
+  GamePhase get phase => state.phase;
+
+  /// Resets score/moves and starts a fresh round. Also called when a new
+  /// round begins after a previous one finished, so it must not carry over
+  /// the prior round's score/moves via [copyWith].
   void startGame() {
-    state = state.copyWith(phase: GamePhase.playing);
+    state = const GameState(phase: GamePhase.playing);
   }
 
   void incrementScore(int amount) {

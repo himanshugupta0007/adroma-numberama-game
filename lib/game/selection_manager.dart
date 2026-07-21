@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../state/game_state.dart';
 import 'grid_component.dart';
 import 'tile_component.dart';
@@ -18,6 +20,15 @@ class SelectionManager {
 
   final List<TileComponent> _selectedTiles = [];
 
+  /// Broadcasts the currently-selected tiles (0, 1, or 2) so UI code can
+  /// render the "sum arc" signature interaction between a real pair without
+  /// this class knowing anything about Flutter widgets.
+  final ValueNotifier<List<TileComponent>> selectedTilesNotifier =
+      ValueNotifier(const []);
+
+  ValueListenable<List<TileComponent>> get selectedTilesListenable =>
+      selectedTilesNotifier;
+
   /// Wires this manager up to the grid it controls. Split from the
   /// constructor because the grid needs a reference to this manager to
   /// build its tiles, creating a construction-order dependency.
@@ -34,6 +45,7 @@ class SelectionManager {
 
     tile.setSelected(true);
     _selectedTiles.add(tile);
+    selectedTilesNotifier.value = List.of(_selectedTiles);
 
     if (_selectedTiles.length == 2) {
       _evaluateSelection();
@@ -63,6 +75,7 @@ class SelectionManager {
 
     grid.removePair(tile1, tile2);
     _selectedTiles.clear();
+    selectedTilesNotifier.value = const [];
 
     gameStateNotifier.incrementScore(_pointsPerPair);
     gameStateNotifier.incrementMoves();
@@ -75,8 +88,17 @@ class SelectionManager {
 
     // Only refill when the player is actually stuck - refilling on tile
     // count alone would mean the board could never reach zero, making the
-    // "clear the whole board to win" rule unreachable.
-    if (!_hasAnyValidPair()) {
+    // "clear the whole board to win" rule unreachable. Keep adding rows
+    // until a valid pair actually exists: a single row isn't guaranteed to
+    // unstick the board, especially with a narrow column count. If the
+    // board fills up (hits GridComponent.maxRows) while still stuck, the
+    // round is lost - there's no more room to refill into.
+    while (!_hasAnyValidPair()) {
+      if (!grid.canAddRow) {
+        // TODO(sound): trigger "board full / game over" sound here.
+        gameStateNotifier.setPhase(GamePhase.lost);
+        return;
+      }
       // TODO(sound): trigger "new row added" sound here.
       grid.addRow();
     }
@@ -97,6 +119,11 @@ class SelectionManager {
 
   void _handleInvalidPair(TileComponent tile1, TileComponent tile2) {
     // TODO(sound): trigger "invalid pair" sound effect here.
+    // Clear immediately (not after the shake) - _evaluateSelection is
+    // synchronous, so there's no real "pending" frame to show the arc for,
+    // and leaving it up during the shake would show it frozen at stale
+    // tile positions while the tiles visibly wiggle underneath.
+    selectedTilesNotifier.value = const [];
     var animationsFinished = 0;
     void onShakeComplete() {
       animationsFinished++;

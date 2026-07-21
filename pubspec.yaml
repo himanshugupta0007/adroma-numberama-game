@@ -15,11 +15,12 @@ dependencies:
   # there is no separate `flame_effects` package on pub.dev.
   flame: ^1.18.0
   flutter_riverpod: ^2.5.1
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
-  flame_test: ^2.2.4
+  flame_test: ^2.2.2
 flutter:
   uses-material-design: true

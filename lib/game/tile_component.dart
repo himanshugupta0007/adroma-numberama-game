@@ -5,6 +5,9 @@ import 'package:flame/effects.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
+import '../theme/app_text_styles.dart';
+
 /// Visual/interaction state of a tile. Purely presentational - whether a
 /// tile *should* be selected, cleared, etc. is decided by SelectionManager,
 /// never by this component itself.
@@ -30,10 +33,10 @@ class TileComponent extends PositionComponent with TapCallbacks {
 
   TileVisualState visualState = TileVisualState.idle;
 
-  static const _idleColor = Color(0xFFFFFFFF);
-  static const _selectedColor = Color(0xFF2979FF);
-  static const _idleTextColor = Color(0xFF212121);
-  static const _selectedTextColor = Color(0xFFFFFFFF);
+  static const _idleColor = AppColors.surfaceRaised;
+  static const _selectedColor = AppColors.amber;
+  static const _idleTextColor = AppColors.textMid;
+  static const _selectedTextColor = AppColors.bgNavy;
   static const _cornerRadiusFactor = 0.16;
 
   @override
@@ -50,10 +53,10 @@ class TileComponent extends PositionComponent with TapCallbacks {
 
     final textColor = isSelected ? _selectedTextColor : _idleTextColor;
     final textPaint = TextPaint(
-      style: TextStyle(
+      style: AppTextStyles.mono(
+        size.y * 0.5,
+        weight: FontWeight.bold,
         color: textColor,
-        fontSize: size.y * 0.5,
-        fontWeight: FontWeight.bold,
       ),
     );
     textPaint.render(

@@ -1,0 +1,108 @@
+import 'package:flutter/material.dart';
+
+import '../../theme/app_colors.dart';
+import '../../theme/app_text_styles.dart';
+
+/// The Play/Daily/Ranks/Settings tab strip on [HomeScreen]. Only Play and
+/// Daily have real destinations this pass - Ranks and Settings render as
+/// inert affordances (no screens are designed for them yet) and surface a
+/// "coming soon" snack bar instead of doing nothing silently on tap.
+class BottomNavBar extends StatelessWidget {
+  const BottomNavBar({
+    super.key,
+    required this.onDailyTap,
+  });
+
+  final VoidCallback onDailyTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(top: 14),
+      decoration: BoxDecoration(
+        color: AppColors.bgNavy,
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.bgDeep.withValues(alpha: 0.45),
+            blurRadius: 20,
+            offset: const Offset(0, -8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.symmetric(horizontal: 20),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _NavItem(
+              icon: Icons.play_circle_fill_rounded,
+              label: 'Play',
+              active: true,
+              onTap: () {},
+            ),
+            _NavItem(
+              icon: Icons.calendar_today_rounded,
+              label: 'Daily',
+              active: false,
+              onTap: onDailyTap,
+            ),
+            _NavItem(
+              icon: Icons.bar_chart_rounded,
+              label: 'Ranks',
+              active: false,
+              onTap: () => _showComingSoon(context, 'Ranks'),
+            ),
+            _NavItem(
+              icon: Icons.tune_rounded,
+              label: 'Settings',
+              active: false,
+              onTap: () => _showComingSoon(context, 'Settings'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static void _showComingSoon(BuildContext context, String label) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label — coming soon')),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? AppColors.amber : AppColors.textLow;
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 4),
+          Text(
+            label.toUpperCase(),
+            style: AppTextStyles.mono(9, weight: FontWeight.w600, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+}

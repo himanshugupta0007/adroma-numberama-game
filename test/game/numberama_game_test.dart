@@ -45,11 +45,30 @@ Future<void> _settle(NumberamaGame game) async {
   }
 }
 
+/// A stand-in for [NumberamaGame.autoRowIntervalSeconds] in tests that
+/// aren't exercising the auto-row timer itself: `_settle` advances the
+/// game clock by a full second per call, and tests below call it several
+/// times, so a real 5s interval would fire mid-test and desync tile counts
+/// from what the test expects. Effectively "never" within a single test run.
+const double _noAutoRows = 1e6;
+
+Future<void> _advance(NumberamaGame game, double seconds) async {
+  const step = 1 / 60;
+  var remaining = seconds;
+  while (remaining > 0) {
+    game.update(step);
+    await game.ready();
+    remaining -= step;
+  }
+}
+
 void main() {
   testWithGame<NumberamaGame>(
-    'populates a 9-column grid with 3 initial rows on load',
+    'populates an 8-column grid with 3 initial rows on load',
     () => NumberamaGame(
-        gameStateNotifier: GameStateNotifier(), random: Random(1)),
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
     (game) async {
       await game.ready();
 
@@ -61,14 +80,16 @@ void main() {
   testWithGame<NumberamaGame>(
     'tapping a valid pair clears both tiles and scores a point',
     () => NumberamaGame(
-        gameStateNotifier: GameStateNotifier(), random: Random(1)),
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
     (game) async {
       await game.ready();
 
       final tiles = game.gridComponent.activeTiles;
       final pair = _findValidPair(tiles);
       expect(pair, isNotNull,
-          reason: 'expected at least one valid pair in a 27-tile grid');
+          reason: 'expected at least one valid pair in a 24-tile grid');
       final [tileA, tileB] = pair!;
 
       final beforeCount = game.gridComponent.tileCount;
@@ -88,14 +109,16 @@ void main() {
   testWithGame<NumberamaGame>(
     'tapping an invalid pair shakes and deselects without scoring',
     () => NumberamaGame(
-        gameStateNotifier: GameStateNotifier(), random: Random(1)),
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
     (game) async {
       await game.ready();
 
       final tiles = game.gridComponent.activeTiles;
       final pair = _findInvalidPair(tiles);
       expect(pair, isNotNull,
-          reason: 'expected at least one invalid pair in a 27-tile grid');
+          reason: 'expected at least one invalid pair in a 24-tile grid');
       final [tileA, tileB] = pair!;
 
       final beforeCount = game.gridComponent.tileCount;
@@ -113,9 +136,11 @@ void main() {
   );
 
   testWithGame<NumberamaGame>(
-    'addRow appends 9 more tiles',
+    'addRow appends 8 more tiles',
     () => NumberamaGame(
-        gameStateNotifier: GameStateNotifier(), random: Random(1)),
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
     (game) async {
       await game.ready();
       final before = game.gridComponent.tileCount;
@@ -130,7 +155,9 @@ void main() {
   testWithGame<NumberamaGame>(
     'clearing the whole board sets phase to won',
     () => NumberamaGame(
-        gameStateNotifier: GameStateNotifier(), random: Random(7)),
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(6),
+        autoRowIntervalSeconds: _noAutoRows),
     (game) async {
       await game.ready();
 
@@ -147,6 +174,43 @@ void main() {
 
       expect(game.gridComponent.isEmpty, isTrue);
       expect(game.gameStateNotifier.state.phase, GamePhase.won);
+    },
+  );
+
+  testWithGame<NumberamaGame>(
+    'a row automatically rises from the bottom once the interval elapses',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: 0.5),
+    (game) async {
+      await game.ready();
+      final before = game.gridComponent.tileCount;
+
+      await _advance(game, 0.5);
+
+      expect(game.gridComponent.tileCount, before + GridComponent.columns);
+      expect(game.gameStateNotifier.state.phase, GamePhase.playing);
+    },
+  );
+
+  testWithGame<NumberamaGame>(
+    'the round ends the moment the rising stack has no room left at the top',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: 0.5),
+    (game) async {
+      await game.ready();
+
+      while (game.gridComponent.canAddRow) {
+        game.gridComponent.addRow();
+      }
+      await game.ready();
+
+      await _advance(game, 0.5);
+
+      expect(game.gameStateNotifier.state.phase, GamePhase.lost);
     },
   );
 }
