@@ -1,4 +1,5 @@
 import 'package:flame/game.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -74,7 +75,7 @@ void main() {
     final tiles = game.gridComponent.activeTiles;
     final pair = _findValidPair(tiles);
     expect(pair, isNotNull,
-        reason: 'expected at least one valid pair in a fresh 24-tile grid');
+        reason: 'expected at least one valid pair in a fresh 27-tile grid');
     final [tileA, tileB] = pair!;
 
     game.selectionManager.onTileTapped(tileA);
@@ -93,7 +94,7 @@ void main() {
     );
   });
 
-  // Clearing an entire (now up to 8-row) board via repeated real taps is
+  // Clearing an entire (now up to 9-row) board via repeated real taps is
   // already covered deterministically and quickly by
   // test/game/numberama_game_test.dart. These two tests instead target
   // what's new here: GameplayScreen's reaction to phase changes and
@@ -141,5 +142,54 @@ void main() {
     expect(results.won, isFalse);
     expect(find.text('BOARD FULL'), findsOneWidget);
     expect(find.text('NO MORE ROOM'), findsOneWidget);
+  });
+
+  testWidgets(
+      'back icon asks for confirmation, and Cancel keeps the round going',
+      (tester) async {
+    await _openGameplay(tester);
+
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded));
+    await _pumpFrames(tester, frames: 40);
+
+    expect(find.text('Leave game?'), findsOneWidget);
+    expect(find.text("You'll lose your current progress."), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await _pumpFrames(tester, frames: 40);
+
+    expect(find.text('Leave game?'), findsNothing);
+    expect(find.byType(GameWidget<NumberamaGame>), findsOneWidget);
+  });
+
+  testWidgets('back icon\'s Leave confirmation actually leaves the round',
+      (tester) async {
+    await _openGameplay(tester);
+
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded));
+    await _pumpFrames(tester, frames: 40);
+    await tester.tap(find.text('Leave'));
+    await _pumpFrames(tester, frames: 60);
+
+    expect(find.byType(GameWidget<NumberamaGame>), findsNothing);
+    expect(find.widgetWithText(GradientButton, 'Play Classic'), findsOneWidget);
+  });
+
+  testWidgets(
+      'pause icon freezes the round behind a dialog until Resume is tapped',
+      (tester) async {
+    final (game, _) = await _openGameplay(tester);
+
+    await tester.tap(find.byIcon(Icons.pause_rounded));
+    await _pumpFrames(tester, frames: 40);
+
+    expect(game.paused, isTrue);
+    expect(find.text('Paused'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(GradientButton, 'Resume'));
+    await _pumpFrames(tester, frames: 40);
+
+    expect(game.paused, isFalse);
+    expect(find.text('Paused'), findsNothing);
   });
 }

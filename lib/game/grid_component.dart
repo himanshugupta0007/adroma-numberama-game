@@ -24,14 +24,17 @@ class GridComponent extends PositionComponent with HasGameReference {
 
   final SelectionManager selectionManager;
 
-  static const int columns = 8;
+  /// Fixed 9x9 board - square on purpose, so [_recalculateMetrics] can size
+  /// it off `min(width, height)` and it shrinks/grows uniformly on any
+  /// screen without ever needing to scroll or overflow its allotted space.
+  static const int columns = 9;
 
   /// Board-full ceiling: once the grid has this many rows, [addRow] can no
   /// longer be called - see [canAddRow].
-  static const int maxRows = 8;
+  static const int maxRows = 9;
 
   /// Tile padding as a fraction of a grid cell's width, per spec: tiles are
-  /// 10% padded relative to (screen width / 8 columns).
+  /// 10% padded relative to (screen width / 9 columns).
   static const double _paddingFactor = 0.1;
 
   /// Injectable so tests can seed deterministic tile values.
@@ -63,11 +66,13 @@ class GridComponent extends PositionComponent with HasGameReference {
 
   /// Cell size is constrained by both axes against the *max* board size
   /// (not the current row count), so tiles never have to shrink again
-  /// later as rows are appended - the full 8x8 board always fits the
-  /// canvas without clipping. The rectangle itself is sized for [maxRows]
-  /// and centered once here - unlike tile layout, it never moves as rows
-  /// are added or cleared, since it represents the fixed play-field
-  /// boundary, not the current stack height.
+  /// later as rows are appended - the full 9x9 board always fits the
+  /// canvas without clipping, and shrinks uniformly (never scrolls) on a
+  /// shorter screen since both axes are divided by the same 9. The
+  /// rectangle itself is sized for [maxRows] and centered once here -
+  /// unlike tile layout, it never moves as rows are added or cleared,
+  /// since it represents the fixed play-field boundary, not the current
+  /// stack height.
   void _recalculateMetrics() {
     _cellSize = min(game.size.x / columns, game.size.y / maxRows);
     _tileSize = _cellSize * (1 - _paddingFactor);
@@ -103,6 +108,15 @@ class GridComponent extends PositionComponent with HasGameReference {
         if (tile == null) continue;
         final target = _positionForCell(row, col, totalRows: totalRows);
         if (tile.position == target) continue;
+        // A previous layout pass (e.g. an earlier addRow() called in the
+        // same synchronous batch, before either had a chance to tick) may
+        // have left a MoveEffect for this tile still queued but not yet
+        // started. Without clearing it first, both effects would fight
+        // over the same tile's position once ticking begins - visible as
+        // rows snapping to the wrong slot or briefly overlapping.
+        tile.children.whereType<MoveEffect>().toList().forEach(
+              (effect) => effect.removeFromParent(),
+            );
         if (animate) {
           tile.add(
             MoveEffect.to(
@@ -155,8 +169,11 @@ class GridComponent extends PositionComponent with HasGameReference {
       ];
 
   /// Appends a new row of random 1-9 tiles at the bottom of the rectangle,
-  /// pushing every existing row up by one cell height.
-  void addRow() {
+  /// pushing every existing row up by one cell height. [animate] should be
+  /// `false` for the silent initial fill (several calls back-to-back with
+  /// no frame tick in between, so there's nothing to smoothly animate from
+  /// anyway) and `true` for every in-round row added while the player watches.
+  void addRow({bool animate = true}) {
     final rowIndex = _grid.length;
     final newTotalRows = rowIndex + 1;
     final row = <TileComponent?>[];
@@ -171,7 +188,7 @@ class GridComponent extends PositionComponent with HasGameReference {
       add(tile);
     }
     _grid.add(row);
-    _applyLayout(animate: true);
+    _applyLayout(animate: animate);
   }
 
   /// Removes [tile1] and [tile2] from the grid and collapses remaining

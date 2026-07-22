@@ -64,7 +64,7 @@ Future<void> _advance(NumberamaGame game, double seconds) async {
 
 void main() {
   testWithGame<NumberamaGame>(
-    'populates an 8-column grid with 3 initial rows on load',
+    'populates a 9-column grid with 3 initial rows on load',
     () => NumberamaGame(
         gameStateNotifier: GameStateNotifier(),
         random: Random(1),
@@ -89,7 +89,7 @@ void main() {
       final tiles = game.gridComponent.activeTiles;
       final pair = _findValidPair(tiles);
       expect(pair, isNotNull,
-          reason: 'expected at least one valid pair in a 24-tile grid');
+          reason: 'expected at least one valid pair in a 27-tile grid');
       final [tileA, tileB] = pair!;
 
       final beforeCount = game.gridComponent.tileCount;
@@ -118,7 +118,7 @@ void main() {
       final tiles = game.gridComponent.activeTiles;
       final pair = _findInvalidPair(tiles);
       expect(pair, isNotNull,
-          reason: 'expected at least one invalid pair in a 24-tile grid');
+          reason: 'expected at least one invalid pair in a 27-tile grid');
       final [tileA, tileB] = pair!;
 
       final beforeCount = game.gridComponent.tileCount;
@@ -136,7 +136,7 @@ void main() {
   );
 
   testWithGame<NumberamaGame>(
-    'addRow appends 8 more tiles',
+    'addRow appends 9 more tiles',
     () => NumberamaGame(
         gameStateNotifier: GameStateNotifier(),
         random: Random(1),
@@ -156,7 +156,7 @@ void main() {
     'clearing the whole board sets phase to won',
     () => NumberamaGame(
         gameStateNotifier: GameStateNotifier(),
-        random: Random(6),
+        random: Random(5),
         autoRowIntervalSeconds: _noAutoRows),
     (game) async {
       await game.ready();
@@ -174,6 +174,57 @@ void main() {
 
       expect(game.gridComponent.isEmpty, isTrue);
       expect(game.gameStateNotifier.state.phase, GamePhase.won);
+    },
+  );
+
+  testWithGame<NumberamaGame>(
+    'initial rows land on distinct, non-overlapping slots',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
+    (game) async {
+      await game.ready();
+
+      // Regression check: the initial fill used to queue an animated
+      // MoveEffect per addRow() call with no frame tick in between, so a
+      // still-pending effect from row 2's shift got clobbered by row 3's -
+      // rows could end up sharing a y (row 3 rendered on top of row 2).
+      final rowYs = game.gridComponent.activeTiles
+          .map((tile) => tile.position.y)
+          .toSet();
+      expect(rowYs.length, NumberamaGame.initialRows,
+          reason: 'each of the ${NumberamaGame.initialRows} initial rows '
+              'should occupy a distinct row slot, not overlap another row');
+    },
+  );
+
+  testWithGame<NumberamaGame>(
+    'the board is a fixed 9x9 square that fits the canvas without overflowing',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
+    (game) async {
+      await game.ready();
+
+      // Square on purpose: columns == maxRows means cell size is bound by
+      // min(width, height) equally on both axes, so the board shrinks or
+      // grows uniformly on any screen instead of needing extra vertical
+      // room that could force the page to scroll.
+      expect(GridComponent.columns, GridComponent.maxRows);
+
+      // A tile's rendered size reveals the cell size actually chosen, so
+      // we can confirm the full rectangle it implies still fits inside the
+      // canvas rather than clipping off an edge.
+      final tileSize = game.gridComponent.activeTiles.first.size.y;
+      const paddingFactor = 0.1;
+      final cellSize = tileSize / (1 - paddingFactor);
+      final boardWidth = GridComponent.columns * cellSize;
+      final boardHeight = GridComponent.maxRows * cellSize;
+
+      expect(boardWidth, lessThanOrEqualTo(game.size.x + 0.01));
+      expect(boardHeight, lessThanOrEqualTo(game.size.y + 0.01));
     },
   );
 

@@ -77,7 +77,7 @@ class NumberamaGame extends FlameGame {
     await add(gridComponent);
 
     for (var i = 0; i < initialRows; i++) {
-      gridComponent.addRow();
+      gridComponent.addRow(animate: false);
     }
 
     add(
