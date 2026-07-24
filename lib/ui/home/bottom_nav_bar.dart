@@ -3,17 +3,13 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
-/// The Play/Daily/Ranks/Settings tab strip on [HomeScreen]. Only Play and
-/// Daily have real destinations this pass - Ranks and Settings render as
-/// inert affordances (no screens are designed for them yet) and surface a
-/// "coming soon" snack bar instead of doing nothing silently on tap.
+/// The Play/Ranks/Settings tab strip on [HomeScreen]. Only Play has a real
+/// destination this pass (Daily Challenge is reached via its own card
+/// above, not this bar) - Ranks and Settings render as inert affordances
+/// (no screens are designed for them yet) and surface a "coming soon" snack
+/// bar instead of doing nothing silently on tap.
 class BottomNavBar extends StatelessWidget {
-  const BottomNavBar({
-    super.key,
-    required this.onDailyTap,
-  });
-
-  final VoidCallback onDailyTap;
+  const BottomNavBar({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -43,12 +39,6 @@ class BottomNavBar extends StatelessWidget {
               label: 'Play',
               active: true,
               onTap: () {},
-            ),
-            _NavItem(
-              icon: Icons.calendar_today_rounded,
-              label: 'Daily',
-              active: false,
-              onTap: onDailyTap,
             ),
             _NavItem(
               icon: Icons.bar_chart_rounded,
