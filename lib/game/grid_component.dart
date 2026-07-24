@@ -173,13 +173,21 @@ class GridComponent extends PositionComponent with HasGameReference {
   /// `false` for the silent initial fill (several calls back-to-back with
   /// no frame tick in between, so there's nothing to smoothly animate from
   /// anyway) and `true` for every in-round row added while the player watches.
+  ///
+  /// Each value is rolled to differ from its left neighbor and from the
+  /// tile directly above it (see [_nextTileValue]) - an equal-value pair
+  /// sitting right next to each other would be spottable at a glance,
+  /// which trivializes the puzzle. This only rules out adjacency, not the
+  /// pair existing on the board at all: it's still just as easy to find by
+  /// looking, just not for free.
   void addRow({bool animate = true}) {
     final rowIndex = _grid.length;
     final newTotalRows = rowIndex + 1;
+    final rowAbove = _grid.isNotEmpty ? _grid.last : null;
     final row = <TileComponent?>[];
     for (var col = 0; col < columns; col++) {
       final tile = TileComponent(
-        value: _random.nextInt(9) + 1,
+        value: _nextTileValue(col: col, row: row, rowAbove: rowAbove),
         onTileTapped: selectionManager.onTileTapped,
         position: _positionForCell(rowIndex, col, totalRows: newTotalRows),
         size: Vector2.all(_tileSize),
@@ -189,6 +197,29 @@ class GridComponent extends PositionComponent with HasGameReference {
     }
     _grid.add(row);
     _applyLayout(animate: animate);
+  }
+
+  /// Rolls a random 1-9 value for the cell at [col] in the row currently
+  /// being built, excluding whatever sits immediately to its left (already
+  /// in [row]) and immediately above it (in [rowAbove], the previous row -
+  /// `null` for the very first row). Excluding at most two values out of
+  /// nine always leaves a non-empty pool, so this can pick directly from
+  /// the allowed set instead of rerolling.
+  int _nextTileValue({
+    required int col,
+    required List<TileComponent?> row,
+    required List<TileComponent?>? rowAbove,
+  }) {
+    final left = col > 0 ? row[col - 1]?.value : null;
+    final above =
+        (rowAbove != null && col < rowAbove.length) ? rowAbove[col]?.value : null;
+    final excluded = {if (left != null) left, if (above != null) above};
+
+    final allowed = [
+      for (var value = 1; value <= 9; value++)
+        if (!excluded.contains(value)) value,
+    ];
+    return allowed[_random.nextInt(allowed.length)];
   }
 
   /// Removes [tile1] and [tile2] from the grid and collapses remaining
@@ -208,6 +239,44 @@ class GridComponent extends PositionComponent with HasGameReference {
         return;
       }
     }
+  }
+
+  /// Delay between one tile starting its flip and the next - small enough
+  /// that the whole board still reads as "one shuffle", large enough that
+  /// it visibly ripples across the board rather than every tile flipping
+  /// in a single flat instant.
+  static const Duration _shuffleStagger = Duration(milliseconds: 18);
+
+  /// Randomly redistributes the values of every tile currently on the
+  /// board among themselves - positions/identities don't change, only
+  /// which number each occupied cell shows - then plays a staggered flip
+  /// reveal across the board. Retries the redistribution (up to
+  /// [maxAttempts] times) until [isAcceptable] holds for the candidate
+  /// values, in [activeTiles] order; if nothing satisfies it, the last
+  /// attempt is used anyway rather than leaving the shuffle a no-op. Used
+  /// by [SelectionManager]'s shuffle power-up, which owns *what* counts as
+  /// acceptable (i.e. "leaves a valid pair") - this method only owns the
+  /// randomization/animation.
+  Future<void> shuffleTileValues({
+    required bool Function(List<int> values) isAcceptable,
+    int maxAttempts = 30,
+  }) async {
+    final tiles = activeTiles;
+    if (tiles.length < 2) return;
+
+    final originalValues = [for (final tile in tiles) tile.value];
+    var candidate = originalValues;
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      candidate = List<int>.from(originalValues)..shuffle(_random);
+      if (isAcceptable(candidate)) break;
+    }
+
+    Future<void> reveal(int i) async {
+      if (i > 0) await Future<void>.delayed(_shuffleStagger * i);
+      await tiles[i].playShuffleAnimation(candidate[i]);
+    }
+
+    await Future.wait([for (var i = 0; i < tiles.length; i++) reveal(i)]);
   }
 
   void _collapse() {

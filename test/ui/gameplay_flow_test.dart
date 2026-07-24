@@ -1,12 +1,16 @@
+import 'dart:io';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 
 import 'package:numberama/game/numberama_game.dart';
 import 'package:numberama/game/tile_component.dart';
 import 'package:numberama/main.dart';
 import 'package:numberama/state/game_state.dart';
+import 'package:numberama/state/preferences_service.dart';
 import 'package:numberama/ui/results/results_screen.dart';
 import 'package:numberama/widgets/gradient_button.dart';
 
@@ -39,11 +43,37 @@ Future<void> _pumpFrames(WidgetTester tester, {int frames = 30}) async {
   }
 }
 
+/// Bumped per call so each test's Hive box gets a unique name - Hive keeps
+/// open boxes cached by name for the life of the test process, so reusing
+/// one across tests (even backed by a fresh temp dir) would leak state.
+int _testBoxCounter = 0;
+
 /// Navigates from Home to a real Gameplay round and returns the live game
-/// plus its provider container.
+/// plus its provider container. Defaults the "How to Play" tutorial to
+/// already-seen (so it doesn't pop up and block taps in tests that aren't
+/// specifically about it) and the best score to 0 - see the dedicated tests
+/// below for both of those flows.
 Future<(NumberamaGame, ProviderContainer)> _openGameplay(
-    WidgetTester tester) async {
-  await tester.pumpWidget(const ProviderScope(child: NumberamaApp()));
+  WidgetTester tester, {
+  bool hasSeenHowToPlay = true,
+  int bestScore = 0,
+}) async {
+  final tempDir = await Directory.systemTemp.createTemp('numberama_test_');
+  Hive.init(tempDir.path);
+  final box = await Hive.openBox('prefs_${_testBoxCounter++}');
+  addTearDown(() async {
+    await box.close();
+    await tempDir.delete(recursive: true);
+  });
+  await box.put('has_seen_how_to_play', hasSeenHowToPlay);
+  await box.put('best_score', bestScore);
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [preferencesBoxProvider.overrideWithValue(box)],
+      child: const NumberamaApp(),
+    ),
+  );
   await tester.pumpAndSettle();
 
   final playClassicButton = find.widgetWithText(GradientButton, 'Play Classic');
@@ -129,6 +159,55 @@ void main() {
   });
 
   testWidgets(
+      'a score that beats the persisted best shows NEW BEST and is saved',
+      (tester) async {
+    final (game, container) = await _openGameplay(tester, bestScore: 0);
+
+    final pair = _findValidPair(game.gridComponent.activeTiles);
+    expect(pair, isNotNull);
+    final [tileA, tileB] = pair!;
+    game.selectionManager.onTileTapped(tileA);
+    game.selectionManager.onTileTapped(tileB);
+    await _pumpFrames(tester);
+
+    container.read(gameStateProvider.notifier).setPhase(GamePhase.won);
+    await _pumpFrames(tester, frames: 40);
+
+    final results = tester.widget<ResultsScreen>(find.byType(ResultsScreen));
+    expect(results.isNewBest, isTrue);
+    expect(find.text('NEW BEST'), findsOneWidget);
+    expect(container.read(preferencesBoxProvider).get('best_score'), 10);
+  });
+
+  testWidgets(
+      'a score that does not beat the persisted best shows no badge and '
+      "doesn't overwrite it", (tester) async {
+    final (game, container) = await _openGameplay(tester, bestScore: 999);
+
+    final pair = _findValidPair(game.gridComponent.activeTiles);
+    expect(pair, isNotNull);
+    final [tileA, tileB] = pair!;
+    game.selectionManager.onTileTapped(tileA);
+    game.selectionManager.onTileTapped(tileB);
+    await _pumpFrames(tester);
+
+    container.read(gameStateProvider.notifier).setPhase(GamePhase.won);
+    await _pumpFrames(tester, frames: 40);
+
+    final results = tester.widget<ResultsScreen>(find.byType(ResultsScreen));
+    expect(results.isNewBest, isFalse);
+    expect(find.text('NEW BEST'), findsNothing);
+    expect(container.read(preferencesBoxProvider).get('best_score'), 999);
+  });
+
+  testWidgets('a pre-existing best score shows up in the HUD from the start',
+      (tester) async {
+    await _openGameplay(tester, bestScore: 250);
+
+    expect(find.text('250'), findsOneWidget);
+  });
+
+  testWidgets(
       'board full while stuck navigates to ResultsScreen as a loss',
       (tester) async {
     final (game, container) = await _openGameplay(tester);
@@ -191,5 +270,44 @@ void main() {
 
     expect(game.paused, isFalse);
     expect(find.text('Paused'), findsNothing);
+  });
+
+  testWidgets(
+      'first-ever round auto-shows How to Play, pausing the round, and '
+      'dismissing it persists the flag so it never shows again',
+      (tester) async {
+    final (game, container) =
+        await _openGameplay(tester, hasSeenHowToPlay: false);
+
+    expect(find.text('How to Play'), findsOneWidget);
+    expect(game.paused, isTrue);
+
+    await tester.tap(find.widgetWithText(GradientButton, 'Got it'));
+    await _pumpFrames(tester, frames: 40);
+
+    expect(find.text('How to Play'), findsNothing);
+    expect(game.paused, isFalse);
+
+    expect(
+      container.read(preferencesBoxProvider).get('has_seen_how_to_play'),
+      isTrue,
+    );
+  });
+
+  testWidgets('the ? icon reopens How to Play on demand', (tester) async {
+    final (game, _) = await _openGameplay(tester);
+    expect(find.text('How to Play'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.help_outline_rounded));
+    await _pumpFrames(tester, frames: 40);
+
+    expect(find.text('How to Play'), findsOneWidget);
+    expect(game.paused, isTrue);
+
+    await tester.tap(find.widgetWithText(GradientButton, 'Got it'));
+    await _pumpFrames(tester, frames: 40);
+
+    expect(find.text('How to Play'), findsNothing);
+    expect(game.paused, isFalse);
   });
 }

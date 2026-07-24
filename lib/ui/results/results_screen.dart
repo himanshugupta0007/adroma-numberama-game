@@ -19,18 +19,25 @@ class ResultsScreen extends StatelessWidget {
     super.key,
     required this.score,
     required this.pairs,
+    required this.bestCombo,
+    required this.isNewBest,
     required this.mode,
     required this.won,
   });
 
   final int score;
   final int pairs;
+
+  /// Highest combo streak reached during the round.
+  final int bestCombo;
+
+  /// Whether [score] beat every previous round's score.
+  final bool isNewBest;
   final GameMode mode;
   final bool won;
 
-  // TODO(stats): combo tracking, round timer, and best-score persistence
-  // don't exist yet - these are static placeholders matching the mockup.
-  static const _mockCombo = 'x5';
+  // TODO(stats): round timer and streak persistence don't exist yet - these
+  // are static placeholders matching the mockup.
   static const _mockTime = '2:14';
   static const _mockStreakDays = 15;
 
@@ -62,9 +69,11 @@ class ResultsScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text('$score', style: AppTextStyles.mono(46, color: AppColors.textHi)),
                   const SizedBox(height: 8),
-                  if (won)
-                    // TODO(best-score): always shown on a win - no
-                    // persisted best yet.
+                  // A new best takes priority over the loss badge - getting
+                  // stuck is still worth celebrating if the score that got
+                  // you there beat everything before it. A win with no new
+                  // best shows neither badge.
+                  if (isNewBest)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -75,7 +84,7 @@ class ResultsScreen extends StatelessWidget {
                           style: AppTextStyles.mono(10.5,
                               weight: FontWeight.w600, color: AppColors.teal)),
                     )
-                  else
+                  else if (!won)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -89,7 +98,14 @@ class ResultsScreen extends StatelessWidget {
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      const Expanded(child: _StatChip(value: _mockCombo, label: 'Combo')),
+                      // Same "never show x0" rule as the in-round badge -
+                      // a round with zero pairs cleared still reads "x1".
+                      Expanded(
+                        child: _StatChip(
+                          value: 'x${bestCombo == 0 ? 1 : bestCombo}',
+                          label: 'Combo',
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(child: _StatChip(value: '$pairs', label: 'Pairs')),
                       const SizedBox(width: 8),

@@ -24,8 +24,10 @@ class TileComponent extends PositionComponent with TapCallbacks {
     required super.size,
   }) : super(anchor: Anchor.topLeft);
 
-  /// The face value of this tile, 1-9.
-  final int value;
+  /// The face value of this tile, 1-9. Mutable only for the shuffle
+  /// power-up (see [setValue]) - every other rule in the game treats a
+  /// tile's value as fixed for its lifetime.
+  int value;
 
   /// Callback invoked on tap. SelectionManager passes itself in via this
   /// function reference so the tile never needs to know about it directly.
@@ -33,10 +35,18 @@ class TileComponent extends PositionComponent with TapCallbacks {
 
   TileVisualState visualState = TileVisualState.idle;
 
+  /// Whether the hint power-up is currently pulsing this tile. Kept
+  /// separate from [visualState] (rather than adding a `hint` case) since a
+  /// hint is a transient highlight, not an interaction-gating state - the
+  /// tile stays tappable and idle/selected logic is unaffected while it's
+  /// hinted.
+  bool isHinted = false;
+
   static const _idleColor = AppColors.surfaceRaised;
   static const _selectedColor = AppColors.amber;
   static const _idleTextColor = AppColors.textMid;
   static const _selectedTextColor = AppColors.bgNavy;
+  static const _hintRingColor = AppColors.teal;
   static const _cornerRadiusFactor = 0.16;
 
   @override
@@ -50,6 +60,16 @@ class TileComponent extends PositionComponent with TapCallbacks {
     final isSelected = visualState == TileVisualState.selected;
     final bgColor = isSelected ? _selectedColor : _idleColor;
     canvas.drawRRect(rrect, Paint()..color = bgColor);
+
+    if (isHinted) {
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3
+          ..color = _hintRingColor,
+      );
+    }
 
     final textColor = isSelected ? _selectedTextColor : _idleTextColor;
     final textPaint = TextPaint(
@@ -80,6 +100,70 @@ class TileComponent extends PositionComponent with TapCallbacks {
   void setSelected(bool selected) {
     if (visualState == TileVisualState.clearing) return;
     visualState = selected ? TileVisualState.selected : TileVisualState.idle;
+  }
+
+  /// Reassigns the number this tile displays, for the shuffle power-up.
+  /// Deliberately doesn't touch position/identity/callbacks - only the
+  /// rendered face value changes, which [render] picks up on its next
+  /// frame with no extra signal needed.
+  void setValue(int newValue) {
+    value = newValue;
+  }
+
+  /// The shuffle power-up's "flip" flourish: squashes flat on the
+  /// horizontal axis, swaps to [newValue] at the midpoint (while the tile
+  /// is edge-on and the old number isn't visible), then unfolds back open -
+  /// a card-flip read rather than the number just silently changing. The
+  /// returned future resolves once the reveal finishes, so callers can
+  /// stagger many tiles without their effects colliding.
+  Future<void> playShuffleAnimation(int newValue) {
+    final completer = Completer<void>();
+    // TODO(sound): trigger "shuffle" sound effect here.
+    add(
+      ScaleEffect.to(
+        Vector2(0, 1),
+        EffectController(duration: 0.12, curve: Curves.easeIn),
+        onComplete: () {
+          value = newValue;
+          add(
+            ScaleEffect.to(
+              Vector2(1, 1),
+              EffectController(duration: 0.15, curve: Curves.easeOut),
+              onComplete: () => completer.complete(),
+            ),
+          );
+        },
+      ),
+    );
+    return completer.future;
+  }
+
+  /// The hint power-up's flourish: rings the tile and pulses it up and back
+  /// twice, then drops the ring. Deliberately leaves [visualState] alone -
+  /// unlike selection/clear/shake, a hint doesn't gate interaction, it's
+  /// just pointing at a pair the player can still tap for themselves. The
+  /// returned future resolves once the pulse finishes, so callers can await
+  /// both tiles in the hinted pair.
+  Future<void> playHintAnimation() {
+    final completer = Completer<void>();
+    isHinted = true;
+    // TODO(sound): trigger "hint" sound effect here.
+    add(
+      ScaleEffect.to(
+        Vector2.all(1.12),
+        EffectController(
+          duration: 0.22,
+          curve: Curves.easeInOut,
+          alternate: true,
+          repeatCount: 2,
+        ),
+        onComplete: () {
+          isHinted = false;
+          completer.complete();
+        },
+      ),
+    );
+    return completer.future;
   }
 
   /// Plays the "valid pair" clear animation and removes this tile from the

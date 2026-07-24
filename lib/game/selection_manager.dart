@@ -52,13 +52,15 @@ class SelectionManager {
     }
   }
 
+  /// The one pairing rule for the whole game: equal values, or values that
+  /// sum to 10.
+  bool _isValidPair(int a, int b) => a == b || a + b == 10;
+
   void _evaluateSelection() {
     final tile1 = _selectedTiles[0];
     final tile2 = _selectedTiles[1];
-    final isValidPair =
-        tile1.value == tile2.value || tile1.value + tile2.value == 10;
 
-    if (isValidPair) {
+    if (_isValidPair(tile1.value, tile2.value)) {
       _handleValidPair(tile1, tile2);
     } else {
       _handleInvalidPair(tile1, tile2);
@@ -77,7 +79,7 @@ class SelectionManager {
     _selectedTiles.clear();
     selectedTilesNotifier.value = const [];
 
-    gameStateNotifier.incrementScore(_pointsPerPair);
+    gameStateNotifier.registerPairCleared(_pointsPerPair);
     gameStateNotifier.incrementMoves();
 
     if (grid.isEmpty) {
@@ -104,14 +106,48 @@ class SelectionManager {
     }
   }
 
-  /// Whether any two tiles currently on the board would form a valid pair.
-  bool _hasAnyValidPair() {
+  /// Shuffle power-up: re-rolls which value sits in which occupied cell and
+  /// plays the flip flourish. [GridComponent.shuffleTileValues] owns the
+  /// randomization/animation; this just tells it what counts as an
+  /// acceptable result - re-rolling into a board with no valid pair at all
+  /// would make the power-up actively hurt the player.
+  Future<void> shuffle() {
+    return grid.shuffleTileValues(isAcceptable: _hasValidPairAmong);
+  }
+
+  /// Hint power-up: finds the first valid pair among the tiles currently on
+  /// the board (in reading order) and pulses both, without selecting them -
+  /// the player still has to tap the pair themselves to actually clear it.
+  /// A no-op if the board somehow has no valid pair (shouldn't happen -
+  /// [_handleValidPair] never leaves the board in that state).
+  Future<void> hint() async {
     final tiles = grid.activeTiles;
     for (var i = 0; i < tiles.length; i++) {
       for (var j = i + 1; j < tiles.length; j++) {
-        final a = tiles[i];
-        final b = tiles[j];
-        if (a.value == b.value || a.value + b.value == 10) return true;
+        if (_isValidPair(tiles[i].value, tiles[j].value)) {
+          await Future.wait([
+            tiles[i].playHintAnimation(),
+            tiles[j].playHintAnimation(),
+          ]);
+          return;
+        }
+      }
+    }
+  }
+
+  /// Whether any two tiles currently on the board would form a valid pair.
+  bool _hasAnyValidPair() => _hasValidPairAmong(
+        [for (final tile in grid.activeTiles) tile.value],
+      );
+
+  /// Whether any two entries in [values] would form a valid pair. Same rule
+  /// as [_hasAnyValidPair], expressed over plain values instead of live
+  /// tiles so [shuffle] can test a candidate redistribution before it's
+  /// ever applied to the board.
+  bool _hasValidPairAmong(List<int> values) {
+    for (var i = 0; i < values.length; i++) {
+      for (var j = i + 1; j < values.length; j++) {
+        if (_isValidPair(values[i], values[j])) return true;
       }
     }
     return false;
@@ -124,6 +160,8 @@ class SelectionManager {
     // and leaving it up during the shake would show it frozen at stale
     // tile positions while the tiles visibly wiggle underneath.
     selectedTilesNotifier.value = const [];
+    gameStateNotifier.resetCombo();
+    gameStateNotifier.registerInvalidAttempt();
     var animationsFinished = 0;
     void onShakeComplete() {
       animationsFinished++;

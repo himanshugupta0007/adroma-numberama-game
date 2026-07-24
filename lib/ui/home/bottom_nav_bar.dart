@@ -18,16 +18,17 @@ class BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.only(top: 14, bottom: 14),
       decoration: BoxDecoration(
         color: AppColors.bgNavy,
+        borderRadius: BorderRadius.circular(10),
         border: Border(
           top: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.bgDeep.withValues(alpha: 0.45),
-            blurRadius: 20,
+            color: AppColors.bgNavy.withValues(alpha: 0.45),
+            blurRadius: 10,
             offset: const Offset(0, -8),
           ),
         ],

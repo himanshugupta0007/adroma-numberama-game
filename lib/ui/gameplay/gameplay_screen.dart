@@ -5,11 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../game/numberama_game.dart';
 import '../../state/game_mode.dart';
 import '../../state/game_state.dart';
+import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/dialog_card.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
 import '../results/results_screen.dart';
+import 'how_to_play_dialog.dart';
 import 'power_bar.dart';
 import 'sum_arc_overlay.dart';
 
@@ -42,6 +45,36 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
     // async lifecycle, not a widget one).
     final notifier = ref.read(gameStateProvider.notifier);
     _game = NumberamaGame(gameStateNotifier: notifier);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowHowToPlay());
+  }
+
+  /// Auto-shows the rules dialog the first time a player ever reaches this
+  /// screen. Runs after the first frame (not synchronously in [initState])
+  /// so `showDialog` has a [Navigator] to find, and marks the flag
+  /// immediately rather than waiting on the dialog's dismissal - a player
+  /// who kills the app mid-dialog shouldn't see it forced on them again.
+  void _maybeShowHowToPlay() {
+    if (!mounted) return;
+    final prefs = ref.read(preferencesServiceProvider);
+    if (prefs.hasSeenHowToPlay) return;
+    prefs.setHasSeenHowToPlay();
+    _showHowToPlay();
+  }
+
+  /// Shows the "How to Play" rules, pausing the round behind it - reused by
+  /// both the first-time auto-show and the top bar's "?" button, so
+  /// reviewing the rules mid-round doesn't let the auto-row timer or a
+  /// stray tap keep advancing the game underneath the dialog.
+  Future<void> _showHowToPlay() async {
+    _game.pauseEngine();
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => HowToPlayDialog(
+        onDismiss: () => Navigator.pop(dialogContext),
+      ),
+    );
+    _game.resumeEngine();
   }
 
   void _goToResults(GameState state, {required bool won}) {
@@ -49,6 +82,16 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
     _navigatedToResults = true;
     final score = state.score;
     final pairs = state.moves;
+    final bestCombo = state.bestCombo;
+
+    // A new best counts on a loss too (a high score before getting stuck is
+    // still a real achievement) - computed synchronously against the box's
+    // current value, then persisted; nothing else touches the box between
+    // these two lines, so the comparison can't go stale.
+    final prefs = ref.read(preferencesServiceProvider);
+    final isNewBest = score > prefs.bestScore;
+    if (isNewBest) prefs.registerScore(score);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -57,6 +100,8 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
           builder: (_) => ResultsScreen(
             score: score,
             pairs: pairs,
+            bestCombo: bestCombo,
+            isNewBest: isNewBest,
             mode: widget.mode,
             won: won,
           ),
@@ -132,6 +177,7 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
                   _TopBar(
                     mode: widget.mode,
                     onBack: _confirmExit,
+                    onHelp: _showHowToPlay,
                     onPause: _pause,
                   ),
                   const SizedBox(height: 16),
@@ -155,7 +201,7 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
                       ),
                     ),
                   ),
-                  const PowerBar(),
+                  PowerBar(selectionManager: _game.selectionManager),
                 ],
               ),
             ),
@@ -170,11 +216,13 @@ class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.mode,
     required this.onBack,
+    required this.onHelp,
     required this.onPause,
   });
 
   final GameMode mode;
   final VoidCallback onBack;
+  final VoidCallback onHelp;
   final VoidCallback onPause;
 
   @override
@@ -198,9 +246,18 @@ class _TopBar extends StatelessWidget {
                 weight: FontWeight.w600, color: AppColors.textMid),
           ),
         ),
-        _CircleIconButton(
-          icon: Icons.pause_rounded,
-          onPressed: onPause,
+        Row(
+          children: [
+            _CircleIconButton(
+              icon: Icons.help_outline_rounded,
+              onPressed: onHelp,
+            ),
+            const SizedBox(width: 8),
+            _CircleIconButton(
+              icon: Icons.pause_rounded,
+              onPressed: onPause,
+            ),
+          ],
         ),
       ],
     );
@@ -248,6 +305,12 @@ class _ScoreRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final score = ref.watch(gameStateProvider.select((s) => s.score));
+    final combo = ref.watch(gameStateProvider.select((s) => s.combo));
+    final bestScore = ref.watch(preferencesServiceProvider).bestScore;
+    // No streak yet (start of round / just missed a pair) still reads as
+    // "x1" rather than "x0" - it's the multiplier the *next* pair would
+    // earn, not a count of pairs already cleared.
+    final comboMultiplier = combo == 0 ? 1 : combo;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -260,7 +323,6 @@ class _ScoreRow extends ConsumerWidget {
             Text('SCORE', style: AppTextStyles.caption),
           ],
         ),
-        // TODO(combo): no combo/streak tracking exists yet - static.
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
@@ -272,45 +334,20 @@ class _ScoreRow extends ConsumerWidget {
             children: [
               const Icon(Icons.bolt_rounded, size: 11, color: AppColors.amber),
               const SizedBox(width: 4),
-              Text('x1', style: AppTextStyles.mono(11, color: AppColors.amber)),
+              Text('x$comboMultiplier',
+                  style: AppTextStyles.mono(11, color: AppColors.amber)),
             ],
           ),
         ),
-        // TODO(best-score): no persistence layer yet - honest placeholder.
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text('—',
-                style: AppTextStyles.mono(16, color: AppColors.textLow)),
+            Text('$bestScore',
+                style: AppTextStyles.mono(16, color: AppColors.textHi)),
             Text('BEST', style: AppTextStyles.caption),
           ],
         ),
       ],
-    );
-  }
-}
-
-/// Shared dark rounded card shell for [_ConfirmDialog] and [_PauseDialog] -
-/// the default [Dialog]/[AlertDialog] chrome doesn't pick up
-/// [AppColors]/[AppTextStyles] on its own.
-class _DialogCard extends StatelessWidget {
-  const _DialogCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: child,
-      ),
     );
   }
 }
@@ -332,7 +369,7 @@ class _ConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _DialogCard(
+    return DialogCard(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -389,7 +426,7 @@ class _PauseDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _DialogCard(
+    return DialogCard(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

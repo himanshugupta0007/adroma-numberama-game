@@ -12,22 +12,66 @@ class GameState {
     this.score = 0,
     this.moves = 0,
     this.phase = GamePhase.idle,
+    this.combo = 0,
+    this.bestCombo = 0,
+    this.shuffleAvailable = true,
+    this.hintAvailable = true,
+    this.consecutiveMisses = 0,
   });
 
   final int score;
   final int moves;
   final GamePhase phase;
 
-  GameState copyWith({int? score, int? moves, GamePhase? phase}) {
+  /// Consecutive valid pairs cleared with no invalid attempt in between.
+  /// Resets to 0 the moment a wrong pair is tapped.
+  final int combo;
+
+  /// Highest [combo] reached so far this round - survives combo resets so
+  /// the results screen can show the round's peak streak, not just however
+  /// it happened to end.
+  final int bestCombo;
+
+  /// Whether the round's one free shuffle is still unused. Once spent it
+  /// stays `false` for the rest of the round - the power bar then shows the
+  /// shuffle slot as ad-gated instead of offering another free use.
+  final bool shuffleAvailable;
+
+  /// Whether the round's one free hint is still unused. Once spent it stays
+  /// `false` for the rest of the round - the power bar then shows the hint
+  /// slot as ad-gated instead of offering another free use.
+  final bool hintAvailable;
+
+  /// Consecutive invalid pair attempts with no valid pair or power-up use
+  /// in between. Drives the power bar's "try shuffle/hint" nudge once the
+  /// player looks stuck - see [GameStateNotifier.registerInvalidAttempt].
+  final int consecutiveMisses;
+
+  GameState copyWith({
+    int? score,
+    int? moves,
+    GamePhase? phase,
+    int? combo,
+    int? bestCombo,
+    bool? shuffleAvailable,
+    bool? hintAvailable,
+    int? consecutiveMisses,
+  }) {
     return GameState(
       score: score ?? this.score,
       moves: moves ?? this.moves,
       phase: phase ?? this.phase,
+      combo: combo ?? this.combo,
+      bestCombo: bestCombo ?? this.bestCombo,
+      shuffleAvailable: shuffleAvailable ?? this.shuffleAvailable,
+      hintAvailable: hintAvailable ?? this.hintAvailable,
+      consecutiveMisses: consecutiveMisses ?? this.consecutiveMisses,
     );
   }
 
   @override
-  String toString() => 'GameState(score: $score, moves: $moves, phase: $phase)';
+  String toString() =>
+      'GameState(score: $score, moves: $moves, phase: $phase, combo: $combo, bestCombo: $bestCombo, shuffleAvailable: $shuffleAvailable, hintAvailable: $hintAvailable, consecutiveMisses: $consecutiveMisses)';
 }
 
 class GameStateNotifier extends StateNotifier<GameState> {
@@ -51,6 +95,51 @@ class GameStateNotifier extends StateNotifier<GameState> {
 
   void incrementMoves() {
     state = state.copyWith(moves: state.moves + 1);
+  }
+
+  /// Registers a cleared pair: bumps the combo streak and awards
+  /// [basePoints] scaled by the resulting streak (e.g. the 3rd pair in a
+  /// row is worth 3x), so combos are a real scoring incentive and not just
+  /// a display number.
+  void registerPairCleared(int basePoints) {
+    final newCombo = state.combo + 1;
+    state = state.copyWith(
+      score: state.score + basePoints * newCombo,
+      combo: newCombo,
+      bestCombo: newCombo > state.bestCombo ? newCombo : state.bestCombo,
+      consecutiveMisses: 0,
+    );
+  }
+
+  /// Breaks the current streak - called whenever an invalid pair is tapped.
+  void resetCombo() {
+    if (state.combo == 0) return;
+    state = state.copyWith(combo: 0);
+  }
+
+  /// Bumps the invalid-attempt streak - called whenever an invalid pair is
+  /// tapped, alongside [resetCombo]. Kept separate from combo since a miss
+  /// streak (which drives the power-bar nudge) and a combo streak (which
+  /// drives scoring) reset on different events - a power-up use clears the
+  /// former but not the latter.
+  void registerInvalidAttempt() {
+    state = state.copyWith(consecutiveMisses: state.consecutiveMisses + 1);
+  }
+
+  /// Spends the round's free shuffle. Idempotent - calling it again once
+  /// already spent (e.g. a stray double-tap) is a no-op rather than an
+  /// error, since there's nothing left to spend.
+  void useShuffle() {
+    if (!state.shuffleAvailable) return;
+    state = state.copyWith(shuffleAvailable: false, consecutiveMisses: 0);
+  }
+
+  /// Spends the round's free hint. Idempotent - calling it again once
+  /// already spent (e.g. a stray double-tap) is a no-op rather than an
+  /// error, since there's nothing left to spend.
+  void useHint() {
+    if (!state.hintAvailable) return;
+    state = state.copyWith(hintAvailable: false, consecutiveMisses: 0);
   }
 
   void setPhase(GamePhase phase) {
