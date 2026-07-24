@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/numberama_game.dart';
+import '../../services/notification_service.dart';
+import '../../state/difficulty.dart';
 import '../../state/game_mode.dart';
 import '../../state/game_state.dart';
 import '../../state/preferences_service.dart';
@@ -22,9 +24,24 @@ import 'sum_arc_overlay.dart';
 /// so score/phase updates (via Riverpod) never reconstruct the Flame game -
 /// only narrowly-scoped HUD subtrees rebuild on state change.
 class GameplayScreen extends ConsumerStatefulWidget {
-  const GameplayScreen({super.key, required this.mode});
+  const GameplayScreen({
+    super.key,
+    required this.mode,
+    this.difficulty = Difficulty.medium,
+    this.isDaily = false,
+  });
 
   final GameMode mode;
+
+  /// Only varies for the Daily Challenge - Classic/Rush from the home
+  /// screen always play at [Difficulty.medium].
+  final Difficulty difficulty;
+
+  /// Whether this round is today's Daily Challenge board rather than an
+  /// ordinary Classic/Rush round - changes the top bar's pill, gates a
+  /// replay to one attempt per day, and switches the results screen over
+  /// to a star rating instead of "Play again".
+  final bool isDaily;
 
   @override
   ConsumerState<GameplayScreen> createState() => _GameplayScreenState();
@@ -44,7 +61,11 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
     // and runs safely outside Flutter's build phase (it's Flame's own
     // async lifecycle, not a widget one).
     final notifier = ref.read(gameStateProvider.notifier);
-    _game = NumberamaGame(gameStateNotifier: notifier);
+    _game = NumberamaGame(
+      gameStateNotifier: notifier,
+      difficulty: widget.difficulty,
+      isDaily: widget.isDaily,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowHowToPlay());
   }
 
@@ -92,6 +113,19 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
     final isNewBest = score > prefs.bestScore;
     if (isNewBest) prefs.registerScore(score);
 
+    if (widget.isDaily) {
+      // Win or loss, today's one attempt is spent - there's no board-state
+      // persistence to let a player resume an abandoned round anyway, and
+      // gating on completion (not on tapping "Start") means backing out of
+      // the pre-round dialogs doesn't cost an attempt.
+      prefs.registerDailyPlayed(DateTime.now());
+      // Today's board is done either way (win or loss) - don't nag about a
+      // streak the player already kept alive today, but leave tomorrow's
+      // reminder untouched.
+      ref.read(notificationServiceProvider).skipTodaysReminder();
+    }
+    final dailyStars = widget.isDaily ? _starsForDaily(bestCombo, won: won) : 0;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -104,10 +138,27 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
             isNewBest: isNewBest,
             mode: widget.mode,
             won: won,
+            isDaily: widget.isDaily,
+            difficulty: widget.difficulty,
+            dailyStars: dailyStars,
           ),
         ),
       );
     });
+  }
+
+  /// A simple, tunable heuristic for the Daily Challenge's star rating: 0
+  /// on a loss, otherwise 1 star just for clearing the board plus one more
+  /// for each combo-streak threshold reached. Scales naturally with
+  /// difficulty since Hard's missing power-ups and far-apart pair
+  /// placement make a long combo harder to sustain in the first place - no
+  /// separate per-tier thresholds needed.
+  int _starsForDaily(int bestCombo, {required bool won}) {
+    if (!won) return 0;
+    var stars = 1;
+    if (bestCombo >= 3) stars++;
+    if (bestCombo >= 6) stars++;
+    return stars;
   }
 
   /// Shows the leave-confirmation dialog and, if the player confirms, pops
@@ -175,13 +226,15 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
               child: Column(
                 children: [
                   _TopBar(
-                    mode: widget.mode,
+                    pillLabel: widget.isDaily
+                        ? 'Daily · ${widget.difficulty.label}'
+                        : widget.mode.pillLabel,
                     onBack: _confirmExit,
                     onHelp: _showHowToPlay,
                     onPause: _pause,
                   ),
                   const SizedBox(height: 16),
-                  const _ScoreRow(),
+                  _ScoreRow(isDaily: widget.isDaily),
                   Expanded(
                     child: Padding(
                       // Symmetric on purpose: keeps the board equidistant
@@ -214,13 +267,13 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
 
 class _TopBar extends StatelessWidget {
   const _TopBar({
-    required this.mode,
+    required this.pillLabel,
     required this.onBack,
     required this.onHelp,
     required this.onPause,
   });
 
-  final GameMode mode;
+  final String pillLabel;
   final VoidCallback onBack;
   final VoidCallback onHelp;
   final VoidCallback onPause;
@@ -241,7 +294,7 @@ class _TopBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Text(
-            mode.pillLabel,
+            pillLabel,
             style: AppTextStyles.mono(16,
                 weight: FontWeight.w600, color: AppColors.textMid),
           ),
@@ -300,13 +353,20 @@ class _CircleIconButton extends StatelessWidget {
 }
 
 class _ScoreRow extends ConsumerWidget {
-  const _ScoreRow();
+  const _ScoreRow({required this.isDaily});
+
+  /// Swaps the all-time "BEST" score readout for a live Rush countdown -
+  /// the best score isn't very interesting mid-sprint, and the countdown
+  /// is the one thing a Daily round has that Classic doesn't.
+  final bool isDaily;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final score = ref.watch(gameStateProvider.select((s) => s.score));
     final combo = ref.watch(gameStateProvider.select((s) => s.combo));
     final bestScore = ref.watch(preferencesServiceProvider).bestScore;
+    final rushSecondsRemaining =
+        ref.watch(gameStateProvider.select((s) => s.rushSecondsRemaining));
     // No streak yet (start of round / just missed a pair) still reads as
     // "x1" rather than "x0" - it's the multiplier the *next* pair would
     // earn, not a count of pairs already cleared.
@@ -339,16 +399,33 @@ class _ScoreRow extends ConsumerWidget {
             ],
           ),
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text('$bestScore',
-                style: AppTextStyles.mono(16, color: AppColors.textHi)),
-            Text('BEST', style: AppTextStyles.caption),
-          ],
-        ),
+        if (isDaily)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(_formatCountdown(rushSecondsRemaining ?? 0),
+                  style: AppTextStyles.mono(16, color: AppColors.coral)),
+              Text('TIME', style: AppTextStyles.caption),
+            ],
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('$bestScore',
+                  style: AppTextStyles.mono(16, color: AppColors.textHi)),
+              Text('BEST', style: AppTextStyles.caption),
+            ],
+          ),
       ],
     );
+  }
+
+  String _formatCountdown(int totalSeconds) {
+    final clamped = totalSeconds < 0 ? 0 : totalSeconds;
+    final minutes = clamped ~/ 60;
+    final seconds = clamped % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }
 

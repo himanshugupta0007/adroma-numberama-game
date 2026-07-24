@@ -17,6 +17,7 @@ class GameState {
     this.shuffleAvailable = true,
     this.hintAvailable = true,
     this.consecutiveMisses = 0,
+    this.rushSecondsRemaining,
   });
 
   final int score;
@@ -47,6 +48,11 @@ class GameState {
   /// player looks stuck - see [GameStateNotifier.registerInvalidAttempt].
   final int consecutiveMisses;
 
+  /// Daily Challenge Rush only - seconds left on the round's countdown, or
+  /// `null` for a Classic round (which has no clock). Ticked once a second
+  /// by [NumberamaGame]; the HUD's countdown display reads this directly.
+  final int? rushSecondsRemaining;
+
   GameState copyWith({
     int? score,
     int? moves,
@@ -56,6 +62,7 @@ class GameState {
     bool? shuffleAvailable,
     bool? hintAvailable,
     int? consecutiveMisses,
+    int? rushSecondsRemaining,
   }) {
     return GameState(
       score: score ?? this.score,
@@ -66,12 +73,13 @@ class GameState {
       shuffleAvailable: shuffleAvailable ?? this.shuffleAvailable,
       hintAvailable: hintAvailable ?? this.hintAvailable,
       consecutiveMisses: consecutiveMisses ?? this.consecutiveMisses,
+      rushSecondsRemaining: rushSecondsRemaining ?? this.rushSecondsRemaining,
     );
   }
 
   @override
   String toString() =>
-      'GameState(score: $score, moves: $moves, phase: $phase, combo: $combo, bestCombo: $bestCombo, shuffleAvailable: $shuffleAvailable, hintAvailable: $hintAvailable, consecutiveMisses: $consecutiveMisses)';
+      'GameState(score: $score, moves: $moves, phase: $phase, combo: $combo, bestCombo: $bestCombo, shuffleAvailable: $shuffleAvailable, hintAvailable: $hintAvailable, consecutiveMisses: $consecutiveMisses, rushSecondsRemaining: $rushSecondsRemaining)';
 }
 
 class GameStateNotifier extends StateNotifier<GameState> {
@@ -85,8 +93,28 @@ class GameStateNotifier extends StateNotifier<GameState> {
   /// Resets score/moves and starts a fresh round. Also called when a new
   /// round begins after a previous one finished, so it must not carry over
   /// the prior round's score/moves via [copyWith].
-  void startGame() {
-    state = const GameState(phase: GamePhase.playing);
+  ///
+  /// [powerUpsEnabled] false (a Hard Daily Challenge) starts the round with
+  /// both shuffle and hint already showing ad-gated instead of the usual
+  /// one free use each - there's no separate "not offered this round" UI
+  /// state, so "start already spent" reuses the existing ad-gated look to
+  /// mean "removed entirely".
+  ///
+  /// [rushSecondsRemaining] is only passed for a Daily Challenge Rush round
+  /// - left `null` for Classic, which has no clock.
+  void startGame({bool powerUpsEnabled = true, int? rushSecondsRemaining}) {
+    state = GameState(
+      phase: GamePhase.playing,
+      shuffleAvailable: powerUpsEnabled,
+      hintAvailable: powerUpsEnabled,
+      rushSecondsRemaining: rushSecondsRemaining,
+    );
+  }
+
+  /// Ticks the Rush countdown - called once a second by [NumberamaGame]
+  /// while a Daily Challenge round is in progress.
+  void setRushSecondsRemaining(int seconds) {
+    state = state.copyWith(rushSecondsRemaining: seconds);
   }
 
   void incrementScore(int amount) {

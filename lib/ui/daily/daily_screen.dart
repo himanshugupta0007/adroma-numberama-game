@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/difficulty.dart';
 import '../../state/game_mode.dart';
+import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
 import '../gameplay/gameplay_screen.dart';
 
-/// Daily challenge landing screen. The date and calendar-strip "today"
-/// marker are real (`DateTime.now()`); the streak/completion status, board
-/// seed, difficulty, and preview mosaic have no backing state yet and are
-/// static placeholders - there's no seeded daily board generator this pass,
-/// "Start today's board" just launches a normal Classic round.
-class DailyScreen extends StatelessWidget {
+/// Daily challenge landing screen. The date, calendar-strip "today" marker,
+/// today's [Difficulty] tier, and the one-attempt-per-day gate are all
+/// real; the streak/completion status for *past* days and the preview
+/// mosaic have no backing state yet and are static placeholders. Today's
+/// board itself is a real, timed Rush round (see [GameplayScreen]) tuned to
+/// today's tier - the seed label is a stable per-date identifier, not yet a
+/// literal RNG seed, so the exact tile layout still varies between plays of
+/// the "same" seed.
+class DailyScreen extends ConsumerWidget {
   const DailyScreen({super.key});
 
   static const _weekdays = [
@@ -27,10 +33,26 @@ class DailyScreen extends StatelessWidget {
   String _formatDate(DateTime d) =>
       '${_weekdays[d.weekday - 1]}, ${_months[d.month - 1]} ${d.day}';
 
+  void _openGameplay(BuildContext context, Difficulty difficulty) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GameplayScreen(
+          mode: GameMode.classic,
+          difficulty: difficulty,
+          isDaily: true,
+        ),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     final todayIndex = now.weekday - 1; // 0=Mon .. 6=Sun
+    final difficulty = Difficulty.forDate(now);
+    final alreadyPlayed =
+        ref.watch(preferencesServiceProvider).hasPlayedDailyOn(now);
 
     return Scaffold(
       body: GraphPaperBackground(
@@ -66,30 +88,30 @@ class DailyScreen extends StatelessWidget {
                       for (var i = 0; i < 7; i++)
                         _CalendarDay(
                           letter: _dayLetters[i],
-                          // TODO(streak): completion status is mocked - the
-                          // first 6 days show "done", only today is real.
+                          // TODO(streak): completion status for past days is
+                          // mocked - only today reflects the real
+                          // one-attempt-per-day flag.
                           state: i < todayIndex
                               ? _DayState.done
                               : i == todayIndex
-                                  ? _DayState.today
+                                  ? (alreadyPlayed
+                                      ? _DayState.done
+                                      : _DayState.today)
                                   : _DayState.future,
                           label: i == todayIndex ? '${now.day}' : null,
                         ),
                     ],
                   ),
                   const SizedBox(height: 22),
-                  const _BoardCard(),
+                  _BoardCard(difficulty: difficulty, date: now),
                   const SizedBox(height: 20),
-                  GradientButton(
-                    label: "Start today's board",
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const GameplayScreen(mode: GameMode.classic),
-                      ),
+                  if (alreadyPlayed)
+                    const _AlreadyPlayedNotice()
+                  else
+                    GradientButton(
+                      label: "Start today's board",
+                      onPressed: () => _openGameplay(context, difficulty),
                     ),
-                  ),
                   const SizedBox(height: 14),
                   Text(
                     'New board unlocks at midnight. Miss a day and the streak '
@@ -172,10 +194,23 @@ class _CalendarDay extends StatelessWidget {
 }
 
 class _BoardCard extends StatelessWidget {
-  const _BoardCard();
+  const _BoardCard({required this.difficulty, required this.date});
+
+  final Difficulty difficulty;
+  final DateTime date;
+
+  /// Same accent-per-tier convention as the rest of the app: teal reads as
+  /// the calm/easy end, amber as the neutral default, coral as the
+  /// urgent/hard end (it was Rush's color when Rush still existed).
+  static Color _chipColor(Difficulty difficulty) => switch (difficulty) {
+        Difficulty.easy => AppColors.teal,
+        Difficulty.medium => AppColors.amber,
+        Difficulty.hard => AppColors.coral,
+      };
 
   @override
   Widget build(BuildContext context) {
+    final chipColor = _chipColor(difficulty);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -195,8 +230,7 @@ class _BoardCard extends StatelessWidget {
                 children: [
                   Text("Today's board", style: AppTextStyles.display(14)),
                   const SizedBox(height: 4),
-                  // TODO(daily): no real seeded-board generator yet.
-                  Text('SEED #0714',
+                  Text(dailySeedLabel(date),
                       style: AppTextStyles.mono(10.5,
                           weight: FontWeight.w600, color: AppColors.textLow)),
                 ],
@@ -204,12 +238,12 @@ class _BoardCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppColors.amber.withValues(alpha: 0.14),
+                  color: chipColor.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text('Medium',
+                child: Text(difficulty.label,
                     style: AppTextStyles.mono(11,
-                        weight: FontWeight.w600, color: AppColors.amber)),
+                        weight: FontWeight.w600, color: chipColor)),
               ),
             ],
           ),
@@ -229,6 +263,55 @@ class _BoardCard extends StatelessWidget {
                   ),
                 ),
             ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.timer_outlined, size: 14, color: AppColors.textLow),
+              const SizedBox(width: 6),
+              Text(
+                '${dailyRushDuration.inSeconds}s to clear the whole board',
+                style: AppTextStyles.display(
+                  11.5,
+                  weight: FontWeight.w400,
+                  color: AppColors.textLow,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown instead of the start button once today's one attempt is spent -
+/// see [PreferencesService.hasPlayedDailyOn].
+class _AlreadyPlayedNotice extends StatelessWidget {
+  const _AlreadyPlayedNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.teal.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.check_circle_rounded, color: AppColors.teal, size: 18),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              "Today's board complete — come back tomorrow",
+              textAlign: TextAlign.center,
+              style: AppTextStyles.display(13,
+                  weight: FontWeight.w500, color: AppColors.teal),
+            ),
           ),
         ],
       ),

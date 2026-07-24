@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../state/difficulty.dart';
 import '../../state/game_mode.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -8,12 +9,12 @@ import '../../widgets/graph_paper_background.dart';
 import '../gameplay/gameplay_screen.dart';
 
 /// Shown when a round ends, either by clearing the board ([GamePhase.won])
-/// or by the board filling up while the player was stuck ([GamePhase.lost]
-/// - reachable now that [GridComponent.maxRows] gives the board a real
-/// ceiling). [score]/[pairs] are the real final values from that round,
-/// passed in at the moment of transition rather than re-read from the
-/// provider (which may already have been reset for the next round by the
-/// time this screen builds).
+/// or falling short ([GamePhase.lost] - the board filling up while stuck,
+/// for Classic, or the Daily Challenge Rush countdown hitting zero with
+/// tiles still left). [score]/[pairs] are the real final values from that
+/// round, passed in at the moment of transition rather than re-read from
+/// the provider (which may already have been reset for the next round by
+/// the time this screen builds).
 class ResultsScreen extends StatelessWidget {
   const ResultsScreen({
     super.key,
@@ -23,6 +24,9 @@ class ResultsScreen extends StatelessWidget {
     required this.isNewBest,
     required this.mode,
     required this.won,
+    this.isDaily = false,
+    this.difficulty = Difficulty.medium,
+    this.dailyStars = 0,
   });
 
   final int score;
@@ -35,6 +39,19 @@ class ResultsScreen extends StatelessWidget {
   final bool isNewBest;
   final GameMode mode;
   final bool won;
+
+  /// Whether this was today's Daily Challenge round rather than an ordinary
+  /// Classic/Rush round - swaps "Play again" for a "Done for today" CTA
+  /// (there's only one daily attempt) and switches the share card over to
+  /// the star rating below instead of raw score.
+  final bool isDaily;
+
+  /// Only meaningful when [isDaily] - which tier today's board was.
+  final Difficulty difficulty;
+
+  /// Only meaningful when [isDaily] - see
+  /// `_GameplayScreenState._starsForDaily`.
+  final int dailyStars;
 
   // TODO(stats): round timer and streak persistence don't exist yet - these
   // are static placeholders matching the mockup.
@@ -64,8 +81,12 @@ class ResultsScreen extends StatelessWidget {
               child: Column(
                 children: [
                   const SizedBox(height: 10),
-                  Text(won ? 'ROUND COMPLETE' : 'BOARD FULL',
-                      style: AppTextStyles.caption),
+                  Text(
+                    won
+                        ? 'ROUND COMPLETE'
+                        : (isDaily ? "TIME'S UP" : 'BOARD FULL'),
+                    style: AppTextStyles.caption,
+                  ),
                   const SizedBox(height: 8),
                   Text('$score', style: AppTextStyles.mono(46, color: AppColors.textHi)),
                   const SizedBox(height: 8),
@@ -91,10 +112,14 @@ class ResultsScreen extends StatelessWidget {
                         color: AppColors.coral.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text('NO MORE ROOM',
+                      child: Text(isDaily ? 'OUT OF TIME' : 'NO MORE ROOM',
                           style: AppTextStyles.mono(10.5,
                               weight: FontWeight.w600, color: AppColors.coral)),
                     ),
+                  if (isDaily) ...[
+                    const SizedBox(height: 10),
+                    _StarsRow(stars: dailyStars),
+                  ],
                   const SizedBox(height: 20),
                   Row(
                     children: [
@@ -115,16 +140,31 @@ class ResultsScreen extends StatelessWidget {
                   const SizedBox(height: 20),
                   const _StreakRow(days: _mockStreakDays),
                   const SizedBox(height: 20),
-                  _ShareCard(pattern: _blockPattern, score: score),
+                  _ShareCard(
+                    pattern: _blockPattern,
+                    score: score,
+                    isDaily: isDaily,
+                    difficulty: difficulty,
+                    dailyStars: dailyStars,
+                  ),
                   const SizedBox(height: 22),
                   GradientButton(
-                    label: 'Play again',
-                    onPressed: () => Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => GameplayScreen(mode: mode),
-                      ),
-                    ),
+                    // The daily board is one attempt only - there's nothing
+                    // to replay, so this just returns to the Daily
+                    // Challenge screen instead of starting a fresh round.
+                    label: isDaily ? 'Done for today' : 'Play again',
+                    onPressed: () {
+                      if (isDaily) {
+                        Navigator.pop(context);
+                        return;
+                      }
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => GameplayScreen(mode: mode),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                   SizedBox(
@@ -171,6 +211,29 @@ class _StatChip extends StatelessWidget {
   }
 }
 
+/// Daily Challenge only: 3 stars, filled amber up to [stars] and outlined
+/// beyond it - the Wordle-style "how well did you do today" readout.
+class _StarsRow extends StatelessWidget {
+  const _StarsRow({required this.stars});
+
+  final int stars;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < 3; i++)
+          Icon(
+            i < stars ? Icons.star_rounded : Icons.star_outline_rounded,
+            color: AppColors.amber,
+            size: 28,
+          ),
+      ],
+    );
+  }
+}
+
 class _StreakRow extends StatelessWidget {
   const _StreakRow({required this.days});
 
@@ -212,10 +275,19 @@ class _StreakRow extends StatelessWidget {
 }
 
 class _ShareCard extends StatelessWidget {
-  const _ShareCard({required this.pattern, required this.score});
+  const _ShareCard({
+    required this.pattern,
+    required this.score,
+    required this.isDaily,
+    required this.difficulty,
+    required this.dailyStars,
+  });
 
   final List<Color> pattern;
   final int score;
+  final bool isDaily;
+  final Difficulty difficulty;
+  final int dailyStars;
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +322,14 @@ class _ShareCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Text('Numberama #142 · $score pts', style: AppTextStyles.caption),
+          Text(
+            isDaily
+                ? 'Numberama Daily · ${dailySeedLabel(DateTime.now())} · '
+                    '${difficulty.label} · ${'★' * dailyStars}'
+                    '${'☆' * (3 - dailyStars)}'
+                : 'Numberama #142 · $score pts',
+            style: AppTextStyles.caption,
+          ),
         ],
       ),
     );

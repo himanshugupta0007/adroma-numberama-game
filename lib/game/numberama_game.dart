@@ -4,6 +4,7 @@ import 'package:flame/components.dart' show TimerComponent;
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart' show Color, Colors;
 
+import '../state/difficulty.dart';
 import '../state/game_state.dart';
 import 'grid_component.dart';
 import 'selection_manager.dart';
@@ -20,15 +21,34 @@ import 'selection_manager.dart';
 class NumberamaGame extends FlameGame {
   NumberamaGame({
     required this.gameStateNotifier,
+    this.difficulty = Difficulty.medium,
+    this.isDaily = false,
     Random? random,
     double? autoRowIntervalSeconds,
+    Duration? rushDuration,
   })  : _random = random,
         autoRowIntervalSeconds =
-            autoRowIntervalSeconds ?? defaultAutoRowIntervalSeconds,
-        selectionManager =
-            SelectionManager(gameStateNotifier: gameStateNotifier);
+            autoRowIntervalSeconds ?? difficulty.autoRowIntervalSeconds,
+        initialRows = difficulty.initialRows,
+        rushDuration = rushDuration ?? dailyRushDuration,
+        selectionManager = SelectionManager(
+          gameStateNotifier: gameStateNotifier,
+          isDaily: isDaily,
+        );
 
   final GameStateNotifier gameStateNotifier;
+
+  /// Governs tile value range and whether power-ups are offered this round
+  /// (both apply to Classic and Daily), plus - for Classic only - starting
+  /// rows and auto-row speed. See [Difficulty]. Classic always plays at
+  /// [Difficulty.medium] (today's existing baseline); only the Daily
+  /// Challenge varies tier.
+  final Difficulty difficulty;
+
+  /// Whether this is the Daily Challenge's Rush mode: a fixed, fully-filled
+  /// board racing a countdown, rather than Classic's rising stack. Flips
+  /// [onLoad] over to the Rush setup path entirely - see there.
+  final bool isDaily;
 
   /// Injectable so tests can seed deterministic tile values.
   final Random? _random;
@@ -36,21 +56,28 @@ class NumberamaGame extends FlameGame {
   static const int columns = GridComponent.columns;
   static const int maxRows = GridComponent.maxRows;
 
-  /// Starting fill: a fresh Classic round begins with 3 of the 8 rows
-  /// filled - the board rises from there rather than the player choosing
-  /// when to add rows.
-  static const int initialRows = 3;
+  /// Classic only - how many of the [maxRows] rows are already filled when
+  /// a fresh round begins, before the board starts rising on its own.
+  /// Derived from [difficulty] - lower on easier tiers, so there's more
+  /// starting headroom.
+  final int initialRows;
 
-  /// Default for [autoRowIntervalSeconds]. Overridable per-instance (like
-  /// [_random]) so tests can drive the timer without waiting on real game
-  /// clock ticks, or push it out of reach entirely when a test wants to
-  /// simulate several `update()` seconds without an auto-row ever firing.
-  static const double defaultAutoRowIntervalSeconds = 5;
-
-  /// How often a new row automatically rises from the bottom. There is no
-  /// manual "add row" control in Classic - this is the only source of new
-  /// rows besides [SelectionManager]'s stuck-board safety net.
+  /// Classic only - how often a new row automatically rises from the
+  /// bottom. There is no manual "add row" control - this is the only
+  /// source of new rows besides [SelectionManager]'s stuck-board safety
+  /// net. Derived from [difficulty] unless overridden (tests only; the app
+  /// never overrides this).
   final double autoRowIntervalSeconds;
+
+  /// Daily Challenge Rush only - how long the countdown starts at. Defaults
+  /// to [dailyRushDuration]; overridable (tests only; the app always uses
+  /// the default).
+  final Duration rushDuration;
+
+  /// Daily Challenge Rush only - seconds left on the countdown, ticked down
+  /// once a second by [_tickRushCountdown]. Mirrored into
+  /// [GameStateNotifier.rushSecondsRemaining] for the HUD.
+  int _rushSecondsRemaining = 0;
 
   /// Constructed eagerly (not in [onLoad]) so UI code can read
   /// [SelectionManager.selectedTilesListenable] synchronously right after
@@ -70,11 +97,37 @@ class NumberamaGame extends FlameGame {
   Future<void> onLoad() async {
     await super.onLoad();
 
-    gridComponent =
-        GridComponent(selectionManager: selectionManager, random: _random);
+    gridComponent = GridComponent(
+      selectionManager: selectionManager,
+      random: _random,
+      maxTileValue: difficulty.maxTileValue,
+    );
     selectionManager.attachGrid(gridComponent);
 
     await add(gridComponent);
+
+    if (isDaily) {
+      gridComponent.fillRushBoard(
+        pairDistanceRange: difficulty.rushPairDistanceRange,
+        sumPairChance: difficulty.rushSumPairChance,
+      );
+
+      _rushSecondsRemaining = rushDuration.inSeconds;
+
+      add(
+        TimerComponent(
+          period: 1,
+          repeat: true,
+          onTick: _tickRushCountdown,
+        ),
+      );
+
+      gameStateNotifier.startGame(
+        powerUpsEnabled: difficulty.powerUpsEnabled,
+        rushSecondsRemaining: _rushSecondsRemaining,
+      );
+      return;
+    }
 
     for (var i = 0; i < initialRows; i++) {
       gridComponent.addRow(animate: false);
@@ -88,19 +141,35 @@ class NumberamaGame extends FlameGame {
       ),
     );
 
-    gameStateNotifier.startGame();
+    gameStateNotifier.startGame(powerUpsEnabled: difficulty.powerUpsEnabled);
   }
 
   /// Fires every [autoRowIntervalSeconds]. If there's still room, a new row
   /// rises from the bottom; if not, the stack has nowhere left to go but
   /// through the rectangle's top edge, so the round ends right here rather
-  /// than silently doing nothing.
+  /// than silently doing nothing. Classic only - [isDaily] uses
+  /// [_tickRushCountdown] instead.
   void _autoAddRow() {
     if (gameStateNotifier.phase != GamePhase.playing) return;
     if (gridComponent.canAddRow) {
       gridComponent.addRow();
     } else {
       gameStateNotifier.setPhase(GamePhase.lost);
+    }
+  }
+
+  /// Fires once a second while a Daily Challenge Rush round is in progress.
+  /// Ends the round the moment the clock hits zero: a win if the board
+  /// happened to already be clear, a loss otherwise (tiles left with no
+  /// time to clear them).
+  void _tickRushCountdown() {
+    if (gameStateNotifier.phase != GamePhase.playing) return;
+    _rushSecondsRemaining--;
+    gameStateNotifier.setRushSecondsRemaining(_rushSecondsRemaining);
+    if (_rushSecondsRemaining <= 0) {
+      gameStateNotifier.setPhase(
+        gridComponent.isEmpty ? GamePhase.won : GamePhase.lost,
+      );
     }
   }
 }

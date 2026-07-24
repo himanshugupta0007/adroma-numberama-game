@@ -9,9 +9,14 @@ import 'tile_component.dart';
 /// animations, and reports outcomes to [GameStateNotifier]. Tile and grid
 /// components stay dumb; this class is where "business logic" lives.
 class SelectionManager {
-  SelectionManager({required this.gameStateNotifier});
+  SelectionManager({required this.gameStateNotifier, this.isDaily = false});
 
   final GameStateNotifier gameStateNotifier;
+
+  /// Whether this round is the Daily Challenge's Rush mode: a fixed board
+  /// with no rising stack, so being stuck isn't itself a loss condition
+  /// (only running out of time is) - see [_handleValidPair].
+  final bool isDaily;
 
   /// Points awarded per valid pair.
   static const int _pointsPerPair = 10;
@@ -87,6 +92,11 @@ class SelectionManager {
       gameStateNotifier.setPhase(GamePhase.won);
       return;
     }
+
+    // Rush is a fixed board for the whole round - no refilling, and being
+    // stuck isn't a loss condition (only the countdown, driven by
+    // NumberamaGame, is). The player just needs to shuffle or wait it out.
+    if (isDaily) return;
 
     // Only refill when the player is actually stuck - refilling on tile
     // count alone would mean the board could never reach zero, making the

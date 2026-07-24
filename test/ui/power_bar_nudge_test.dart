@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:numberama/game/numberama_game.dart';
-import 'package:numberama/game/selection_manager.dart';
 import 'package:numberama/state/game_state.dart';
 import 'package:numberama/ui/gameplay/power_bar.dart';
 

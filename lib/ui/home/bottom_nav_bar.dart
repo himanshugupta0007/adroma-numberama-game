@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../settings_screen.dart';
 
-/// The Play/Ranks/Settings tab strip on [HomeScreen]. Only Play has a real
-/// destination this pass (Daily Challenge is reached via its own card
-/// above, not this bar) - Ranks and Settings render as inert affordances
-/// (no screens are designed for them yet) and surface a "coming soon" snack
-/// bar instead of doing nothing silently on tap.
+/// The Play/Ranks/Settings tab strip on [HomeScreen]. Play and Settings
+/// have real destinations (Daily Challenge is reached via its own card
+/// above, not this bar) - Ranks renders as an inert affordance (no screen
+/// designed for it yet) and surfaces a "coming soon" snack bar instead of
+/// doing nothing silently on tap.
 class BottomNavBar extends StatelessWidget {
   const BottomNavBar({super.key});
 
@@ -50,7 +51,10 @@ class BottomNavBar extends StatelessWidget {
               icon: Icons.tune_rounded,
               label: 'Settings',
               active: false,
-              onTap: () => _showComingSoon(context, 'Settings'),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              ),
             ),
           ],
         ),

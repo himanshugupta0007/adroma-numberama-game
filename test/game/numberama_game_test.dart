@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:numberama/game/grid_component.dart';
 import 'package:numberama/game/numberama_game.dart';
 import 'package:numberama/game/tile_component.dart';
+import 'package:numberama/state/difficulty.dart';
 import 'package:numberama/state/game_state.dart';
 
 /// Finds two currently-active tiles that would form a valid pair (equal
@@ -193,9 +194,9 @@ void main() {
       final rowYs = game.gridComponent.activeTiles
           .map((tile) => tile.position.y)
           .toSet();
-      expect(rowYs.length, NumberamaGame.initialRows,
-          reason: 'each of the ${NumberamaGame.initialRows} initial rows '
-              'should occupy a distinct row slot, not overlap another row');
+      expect(rowYs.length, game.initialRows,
+          reason: 'each of the ${game.initialRows} initial rows should '
+              'occupy a distinct row slot, not overlap another row');
     },
   );
 
@@ -264,4 +265,184 @@ void main() {
       expect(game.gameStateNotifier.state.phase, GamePhase.lost);
     },
   );
+
+  testWithGame<NumberamaGame>(
+    'easy difficulty only ever generates tile values 1-5',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        difficulty: Difficulty.easy,
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
+    (game) async {
+      await game.ready();
+
+      expect(game.initialRows, Difficulty.easy.initialRows);
+      for (final tile in game.gridComponent.activeTiles) {
+        expect(tile.value, inInclusiveRange(1, 5));
+      }
+    },
+  );
+
+  testWithGame<NumberamaGame>(
+    'hard difficulty starts with both power-ups already ad-gated',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        difficulty: Difficulty.hard,
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
+    (game) async {
+      await game.ready();
+
+      expect(game.initialRows, Difficulty.hard.initialRows);
+      expect(game.gameStateNotifier.state.shuffleAvailable, isFalse);
+      expect(game.gameStateNotifier.state.hintAvailable, isFalse);
+    },
+  );
+
+  testWithGame<NumberamaGame>(
+    'Classic rounds have no rush countdown',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
+    (game) async {
+      await game.ready();
+      expect(game.gameStateNotifier.state.rushSecondsRemaining, isNull);
+    },
+  );
+
+  group('Daily Challenge Rush', () {
+    testWithGame<NumberamaGame>(
+      'fills the entire board minus one blank cell at load',
+      () => NumberamaGame(
+          gameStateNotifier: GameStateNotifier(),
+          isDaily: true,
+          random: Random(1),
+          rushDuration: const Duration(seconds: 60)),
+      (game) async {
+        await game.ready();
+
+        expect(
+          game.gridComponent.tileCount,
+          GridComponent.columns * GridComponent.maxRows - 1,
+        );
+        // Rush is a fixed board, not a rising stack - it starts full.
+        expect(game.gridComponent.canAddRow, isFalse);
+      },
+    );
+
+    testWithGame<NumberamaGame>(
+      'is always fully clearable, whichever valid pair is tapped first',
+      () => NumberamaGame(
+          gameStateNotifier: GameStateNotifier(),
+          isDaily: true,
+          random: Random(2),
+          rushDuration: const Duration(seconds: 60)),
+      (game) async {
+        await game.ready();
+
+        var safetyCounter = 0;
+        while (!game.gridComponent.isEmpty && safetyCounter < 500) {
+          safetyCounter++;
+          final pair = _findValidPair(game.gridComponent.activeTiles);
+          // Every planted pair sits entirely within one "value component"
+          // ({1,9}, {2,8}, {3,7}, {4,6}, {5}) where any two members are
+          // mutually valid, and every clear removes exactly two tiles from
+          // whichever component they came from - so no component can ever
+          // reach an odd remaining count, and the board can never truly
+          // get stuck with tiles left, regardless of clear order.
+          expect(pair, isNotNull,
+              reason: 'Rush board should never get stuck with tiles left');
+          final [tileA, tileB] = pair!;
+          game.selectionManager.onTileTapped(tileA);
+          game.selectionManager.onTileTapped(tileB);
+          await _settle(game);
+        }
+
+        expect(game.gridComponent.isEmpty, isTrue);
+      },
+    );
+
+    testWithGame<NumberamaGame>(
+      'ends in a win if the board clears before the countdown runs out',
+      () => NumberamaGame(
+          gameStateNotifier: GameStateNotifier(),
+          isDaily: true,
+          random: Random(2),
+          rushDuration: const Duration(seconds: 60)),
+      (game) async {
+        await game.ready();
+
+        var safetyCounter = 0;
+        while (!game.gridComponent.isEmpty && safetyCounter < 500) {
+          safetyCounter++;
+          final pair = _findValidPair(game.gridComponent.activeTiles);
+          expect(pair, isNotNull);
+          final [tileA, tileB] = pair!;
+          game.selectionManager.onTileTapped(tileA);
+          game.selectionManager.onTileTapped(tileB);
+          await _settle(game);
+        }
+
+        expect(game.gridComponent.isEmpty, isTrue);
+        expect(game.gameStateNotifier.state.phase, GamePhase.won);
+      },
+    );
+
+    testWithGame<NumberamaGame>(
+      'ends in a loss the moment the countdown reaches zero with tiles left',
+      () => NumberamaGame(
+          gameStateNotifier: GameStateNotifier(),
+          isDaily: true,
+          random: Random(1),
+          rushDuration: const Duration(seconds: 2)),
+      (game) async {
+        await game.ready();
+        expect(game.gridComponent.isEmpty, isFalse);
+
+        await _advance(game, 2);
+
+        expect(game.gameStateNotifier.state.phase, GamePhase.lost);
+      },
+    );
+
+    testWithGame<NumberamaGame>(
+      'does not end early just because the board looks stuck - only the '
+      'clock can end it before a clear', () => NumberamaGame(
+          gameStateNotifier: GameStateNotifier(),
+          isDaily: true,
+          random: Random(1),
+          rushDuration: const Duration(seconds: 5)),
+      (game) async {
+        await game.ready();
+        // Rush fills every row - there's no rising-stack "room" to refill,
+        // so if Classic's stuck-refill/auto-lose logic somehow still ran
+        // here, the round would end the instant it judged the board stuck.
+        // Letting time pass with no taps at all must never end the round
+        // before the clock does.
+        expect(game.gridComponent.canAddRow, isFalse);
+
+        await _advance(game, 3);
+
+        expect(game.gameStateNotifier.state.phase, GamePhase.playing);
+      },
+    );
+
+    testWithGame<NumberamaGame>(
+      'the countdown ticks down once a second and is mirrored into GameState',
+      () => NumberamaGame(
+          gameStateNotifier: GameStateNotifier(),
+          isDaily: true,
+          random: Random(1),
+          rushDuration: const Duration(seconds: 10)),
+      (game) async {
+        await game.ready();
+        expect(game.gameStateNotifier.state.rushSecondsRemaining, 10);
+
+        await _advance(game, 3);
+
+        expect(game.gameStateNotifier.state.rushSecondsRemaining, 7);
+      },
+    );
+  });
 }

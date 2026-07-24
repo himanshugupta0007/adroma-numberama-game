@@ -19,10 +19,18 @@ import 'tile_component.dart';
 /// only - the decision of *which* two tiles form a valid pair, and what to
 /// do when the board is both stuck and full, lives in [SelectionManager].
 class GridComponent extends PositionComponent with HasGameReference {
-  GridComponent({required this.selectionManager, Random? random})
-      : _random = random ?? Random();
+  GridComponent({
+    required this.selectionManager,
+    Random? random,
+    this.maxTileValue = 9,
+  }) : _random = random ?? Random();
 
   final SelectionManager selectionManager;
+
+  /// Tile face values are drawn from 1..[maxTileValue] - a Daily Challenge
+  /// on an easier tier narrows this so pairs are easier to spot at a
+  /// glance. Defaults to the full 1-9 spread.
+  final int maxTileValue;
 
   /// Fixed 9x9 board - square on purpose, so [_recalculateMetrics] can size
   /// it off `min(width, height)` and it shrinks/grows uniformly on any
@@ -199,12 +207,13 @@ class GridComponent extends PositionComponent with HasGameReference {
     _applyLayout(animate: animate);
   }
 
-  /// Rolls a random 1-9 value for the cell at [col] in the row currently
-  /// being built, excluding whatever sits immediately to its left (already
-  /// in [row]) and immediately above it (in [rowAbove], the previous row -
-  /// `null` for the very first row). Excluding at most two values out of
-  /// nine always leaves a non-empty pool, so this can pick directly from
-  /// the allowed set instead of rerolling.
+  /// Rolls a random 1..[maxTileValue] value for the cell at [col] in the
+  /// row currently being built, excluding whatever sits immediately to its
+  /// left (already in [row]) and immediately above it (in [rowAbove], the
+  /// previous row - `null` for the very first row). Excluding at most two
+  /// values out of the allowed range always leaves a non-empty pool (the
+  /// narrowest range, [maxTileValue] 5, still leaves 3), so this can pick
+  /// directly from the allowed set instead of rerolling.
   int _nextTileValue({
     required int col,
     required List<TileComponent?> row,
@@ -216,10 +225,104 @@ class GridComponent extends PositionComponent with HasGameReference {
     final excluded = {if (left != null) left, if (above != null) above};
 
     final allowed = [
-      for (var value = 1; value <= 9; value++)
+      for (var value = 1; value <= maxTileValue; value++)
         if (!excluded.contains(value)) value,
     ];
     return allowed[_random.nextInt(allowed.length)];
+  }
+
+  /// Fills the *entire* board in one shot - every one of [maxRows] x
+  /// [columns] cells gets a tile except [emptyCells] left blank, rather
+  /// than growing row by row from the bottom like [addRow]. Used only by
+  /// the Daily Challenge's Rush mode, where the whole board exists from
+  /// the first frame and there's no rising stack to grow.
+  ///
+  /// [emptyCells] defaults to 1 so the remaining tile count (board size
+  /// minus [emptyCells]) is always even - [columns] * [maxRows] alone is
+  /// odd (81), which would leave one tile mathematically unmatchable and
+  /// the board impossible to ever fully clear.
+  ///
+  /// Values are placed in matched pairs (equal-value, or summing to 10)
+  /// whose two cells are [pairDistanceRange] apart (Chebyshev distance -
+  /// diagonal neighbors count as distance 1), with [sumPairChance]
+  /// governing the split between the two pair types. This guarantees the
+  /// board is fully clearable by construction: every tile has at least the
+  /// partner it was planted with, even before counting any incidental
+  /// matches elsewhere on the board.
+  void fillRushBoard({
+    required ({int min, int max}) pairDistanceRange,
+    required double sumPairChance,
+    int emptyCells = 1,
+  }) {
+    final cells = [
+      for (var row = 0; row < maxRows; row++)
+        for (var col = 0; col < columns; col++) (row, col),
+    ]..shuffle(_random);
+
+    // The first `emptyCells` never get assigned a value below - they stay
+    // blank, which is what makes the remaining count even.
+    final unfilled = cells.skip(emptyCells).toList();
+    final values = <(int, int), int>{};
+
+    while (unfilled.isNotEmpty) {
+      final anchor = unfilled.removeLast();
+      final candidates = unfilled
+          .where((cell) => _withinDistance(anchor, cell, pairDistanceRange))
+          .toList();
+      // The distance band can't always be satisfied once only a handful of
+      // (already-constrained) cells remain - fall back to whatever's left
+      // rather than getting stuck with an unplaced cell.
+      final partner = candidates.isEmpty
+          ? unfilled[_random.nextInt(unfilled.length)]
+          : candidates[_random.nextInt(candidates.length)];
+      unfilled.remove(partner);
+
+      final value = 1 + _random.nextInt(maxTileValue);
+      final complement = 10 - value;
+      // A sum-to-10 pair needs its complement to also be a legal value for
+      // this difficulty's range (e.g. easy's 1-5 range can't pair a 1 with
+      // a 9) - fall back to an equal-value pair when it isn't, still a
+      // perfectly valid pair either way.
+      final canSumPair = complement >= 1 && complement <= maxTileValue;
+      final wantsSumPair = _random.nextDouble() < sumPairChance;
+      final partnerValue = (wantsSumPair && canSumPair) ? complement : value;
+
+      values[anchor] = value;
+      values[partner] = partnerValue;
+    }
+
+    for (var row = 0; row < maxRows; row++) {
+      final rowTiles = <TileComponent?>[];
+      for (var col = 0; col < columns; col++) {
+        final value = values[(row, col)];
+        if (value == null) {
+          rowTiles.add(null);
+          continue;
+        }
+        final tile = TileComponent(
+          value: value,
+          onTileTapped: selectionManager.onTileTapped,
+          position: _positionForCell(row, col, totalRows: maxRows),
+          size: Vector2.all(_tileSize),
+        );
+        rowTiles.add(tile);
+        add(tile);
+      }
+      _grid.add(rowTiles);
+    }
+    _applyLayout(animate: false);
+  }
+
+  /// Chebyshev distance (the max of the row and column deltas, so diagonal
+  /// neighbors count as distance 1 same as orthogonal ones) between two
+  /// cells, checked against [range].
+  bool _withinDistance(
+    (int, int) a,
+    (int, int) b,
+    ({int min, int max}) range,
+  ) {
+    final distance = max((a.$1 - b.$1).abs(), (a.$2 - b.$2).abs());
+    return distance >= range.min && distance <= range.max;
   }
 
   /// Removes [tile1] and [tile2] from the grid and collapses remaining
