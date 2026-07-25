@@ -39,5 +39,23 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      # Xcode 16's default script sandboxing breaks CocoaPods' "[CP] Embed
+      # Pods Frameworks" script phase (it can't properly codesign the
+      # copied frameworks under the sandbox), producing an
+      # "invalid signature" install failure for Pods_Runner.framework on a
+      # real device. Runner's own target already has this off; the
+      # generated Pods project needs it too.
+      config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+
+      # Xcode's Module Verifier compiles each pod's headers in isolation as
+      # a sanity check, separate from the real app build — that isolated
+      # check doesn't inherit Runner's header search paths, so it can't see
+      # Flutter/Flutter.h and fails with a false-positive "file not found"
+      # (shows up as a VerifyModule/Test.framework error in build logs).
+      # Disabling it here doesn't affect the real build, only this extra
+      # check.
+      config.build_settings['ENABLE_MODULE_VERIFIER'] = 'NO'
+    end
   end
 end
