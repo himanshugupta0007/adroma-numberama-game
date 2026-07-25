@@ -8,12 +8,13 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
+import '../../widgets/streak_summary_card.dart';
 import '../gameplay/gameplay_screen.dart';
+import '../home/bottom_nav_bar.dart';
 
 /// Daily challenge landing screen. The date, calendar-strip day markers
 /// (driven by [PreferencesService.hasEverPlayedDailyOn]), today's
-/// [Difficulty] tier, and the one-attempt-per-day gate are all real; only
-/// the preview mosaic has no backing state yet and is a static placeholder.
+/// [Difficulty] tier, and the one-attempt-per-day gate are all real.
 /// Today's board itself is a real, timed Rush round (see [GameplayScreen])
 /// tuned to today's tier - the seed label is a stable per-date identifier,
 /// not yet a literal RNG seed, so the exact tile layout still varies
@@ -22,11 +23,27 @@ class DailyScreen extends ConsumerWidget {
   const DailyScreen({super.key});
 
   static const _weekdays = [
-    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
   static const _months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   static const _dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -52,6 +69,11 @@ class DailyScreen extends ConsumerWidget {
     final todayIndex = now.weekday - 1; // 0=Mon .. 6=Sun
     final weekStart = now.subtract(Duration(days: todayIndex));
     final difficulty = Difficulty.forDate(now);
+    // Reset Progress (Settings) can wipe the streak/calendar history shown
+    // below from outside this screen entirely - see
+    // preferencesRevisionProvider's doc for why watching the service alone
+    // isn't enough to pick that up.
+    ref.watch(preferencesRevisionProvider);
     final prefs = ref.watch(preferencesServiceProvider);
     final alreadyPlayed = prefs.hasPlayedDailyOn(now);
 
@@ -60,70 +82,72 @@ class DailyScreen extends ConsumerWidget {
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.chevron_left_rounded,
-                            color: AppColors.textHi),
-                      ),
-                      Text('Daily challenge', style: AppTextStyles.display(19)),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: Text(
-                      _formatDate(now).toUpperCase(),
-                      style: AppTextStyles.mono(11,
-                          weight: FontWeight.w600, color: AppColors.textLow),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      for (var i = 0; i < 7; i++)
-                        _CalendarDay(
-                          letter: _dayLetters[i],
-                          state: i == todayIndex
-                              ? (alreadyPlayed
-                                  ? _DayState.done
-                                  : _DayState.today)
-                              : i < todayIndex &&
-                                      prefs.hasEverPlayedDailyOn(
-                                          weekStart.add(Duration(days: i)))
-                                  ? _DayState.done
-                                  : _DayState.future,
-                          label: i == todayIndex ? '${now.day}' : null,
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Daily challenge',
+                            style: AppTextStyles.display(19)),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            _formatDate(now).toUpperCase(),
+                            style: AppTextStyles.mono(11,
+                                weight: FontWeight.w600,
+                                color: AppColors.textLow),
+                          ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 22),
-                  _BoardCard(difficulty: difficulty, date: now),
-                  const SizedBox(height: 20),
-                  if (alreadyPlayed)
-                    const _AlreadyPlayedNotice()
-                  else
-                    GradientButton(
-                      label: "Start today's board",
-                      onPressed: () => _openGameplay(context, difficulty),
+                        const SizedBox(height: 14),
+                        StreakSummaryCard(days: prefs.currentStreak),
+                        const SizedBox(height: 18),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            for (var i = 0; i < 7; i++)
+                              _CalendarDay(
+                                letter: _dayLetters[i],
+                                state: i == todayIndex
+                                    ? (alreadyPlayed
+                                        ? _DayState.done
+                                        : _DayState.today)
+                                    : i < todayIndex &&
+                                            prefs.hasEverPlayedDailyOn(weekStart
+                                                .add(Duration(days: i)))
+                                        ? _DayState.done
+                                        : _DayState.future,
+                                label: i == todayIndex ? '${now.day}' : null,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 22),
+                        _BoardCard(difficulty: difficulty, date: now),
+                        const SizedBox(height: 20),
+                        if (alreadyPlayed)
+                          const _AlreadyPlayedNotice()
+                        else
+                          GradientButton(
+                            label: "Start today's board",
+                            onPressed: () => _openGameplay(context, difficulty),
+                          ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'New board unlocks at midnight. Miss a day and the '
+                          'streak resets — no undo.',
+                          style: AppTextStyles.display(
+                            11.5,
+                            weight: FontWeight.w400,
+                            color: AppColors.textLow,
+                          ).copyWith(fontStyle: FontStyle.italic),
+                        ),
+                      ],
                     ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'New board unlocks at midnight. Miss a day and the streak '
-                    'resets — no undo.',
-                    style: AppTextStyles.display(
-                      11.5,
-                      weight: FontWeight.w400,
-                      color: AppColors.textLow,
-                    ).copyWith(fontStyle: FontStyle.italic),
                   ),
-                ],
-              ),
+                ),
+                const BottomNavBar(activeTab: HomeTab.daily),
+              ],
             ),
           ),
         ),
@@ -208,6 +232,15 @@ class _BoardCard extends StatelessWidget {
         Difficulty.hard => AppColors.coral,
       };
 
+  /// A tier-themed glyph for the icon badge - calm for easy, balanced for
+  /// medium, intense for hard - same accent-per-tier convention as
+  /// [_chipColor], just as an icon instead of a color.
+  static IconData _tierIcon(Difficulty difficulty) => switch (difficulty) {
+        Difficulty.easy => Icons.spa_rounded,
+        Difficulty.medium => Icons.balance_rounded,
+        Difficulty.hard => Icons.local_fire_department_rounded,
+      };
+
   @override
   Widget build(BuildContext context) {
     final chipColor = _chipColor(difficulty);
@@ -236,7 +269,8 @@ class _BoardCard extends StatelessWidget {
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: chipColor.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(999),
@@ -247,40 +281,83 @@ class _BoardCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          GridView.count(
-            crossAxisCount: 6,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 4,
-            mainAxisSpacing: 4,
-            children: [
-              for (var i = 1; i <= 24; i++)
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: i % 3 == 0 ? AppColors.bgNavy : AppColors.surfaceRaised,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 18),
+          // Real per-tier facts replace what used to be a purely
+          // decorative filler grid - the icon badge is the only piece
+          // that's still illustrative rather than data-driven.
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.timer_outlined, size: 14, color: AppColors.textLow),
-              const SizedBox(width: 6),
-              Text(
-                '${dailyRushDuration.inSeconds}s to clear the whole board',
-                style: AppTextStyles.display(
-                  11.5,
-                  weight: FontWeight.w400,
-                  color: AppColors.textLow,
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: chipColor.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(_tierIcon(difficulty), color: chipColor, size: 26),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  children: [
+                    _BoardStatRow(
+                      icon: Icons.numbers_rounded,
+                      label: 'Tile range',
+                      value: '1–${difficulty.maxTileValue}',
+                    ),
+                    const SizedBox(height: 8),
+                    _BoardStatRow(
+                      icon: Icons.auto_awesome_rounded,
+                      label: 'Power-ups',
+                      value: difficulty.powerUpsEnabled ? 'On' : 'Off',
+                    ),
+                    const SizedBox(height: 8),
+                    _BoardStatRow(
+                      icon: Icons.timer_outlined,
+                      label: 'Time limit',
+                      value: '${dailyRushDuration.inSeconds}s',
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+/// One "icon · label · value" line in [_BoardCard]'s stat list.
+class _BoardStatRow extends StatelessWidget {
+  const _BoardStatRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: AppColors.textLow),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: AppTextStyles.display(12,
+              weight: FontWeight.w400, color: AppColors.textMid),
+        ),
+        const Spacer(),
+        Text(value,
+            style: AppTextStyles.mono(12,
+                weight: FontWeight.w600, color: AppColors.textHi)),
+      ],
     );
   }
 }
@@ -303,7 +380,8 @@ class _AlreadyPlayedNotice extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.check_circle_rounded, color: AppColors.teal, size: 18),
+          const Icon(Icons.check_circle_rounded,
+              color: AppColors.teal, size: 18),
           const SizedBox(width: 8),
           Flexible(
             child: Text(

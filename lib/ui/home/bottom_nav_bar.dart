@@ -2,16 +2,48 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/message_dialog.dart';
+import '../daily/daily_screen.dart';
 import '../settings_screen.dart';
 
-/// The Play/Ranks/Settings tab strip on [HomeScreen]. Play and Settings
-/// have real destinations (Daily Challenge is reached via its own card
-/// above, not this bar) - Ranks renders as an inert affordance (no screen
-/// designed for it yet) and surfaces a "coming soon" dialog instead of
-/// doing nothing silently on tap.
+/// The three real destinations [BottomNavBar] switches between. `results`
+/// isn't one of them - the results screen shows the bar too (per
+/// [BottomNavBar]'s doc) but isn't itself a tab, so every item there reads
+/// as inactive until tapped.
+enum HomeTab { play, daily, settings, results }
+
+/// The Play/Daily/Settings tab strip shown on every screen except
+/// [GameplayScreen] itself (a round in progress has no business showing
+/// navigation away from it) - Home, Daily Challenge, Settings, and the
+/// post-round Results screen all include it. [activeTab] marks which one
+/// is currently on screen; tapping a different tab always normalizes the
+/// stack back down to [HomeScreen] first (via `popUntil` the first route)
+/// before pushing the new destination, so switching tabs can never stack
+/// up Daily-on-top-of-Settings-on-top-of-Daily.
 class BottomNavBar extends StatelessWidget {
-  const BottomNavBar({super.key});
+  const BottomNavBar({super.key, this.activeTab = HomeTab.play});
+
+  final HomeTab activeTab;
+
+  void _switchTo(BuildContext context, HomeTab tab) {
+    if (tab == activeTab) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    switch (tab) {
+      case HomeTab.play:
+        break; // popUntil above already landed on Home.
+      case HomeTab.daily:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const DailyScreen()),
+        );
+      case HomeTab.settings:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+        );
+      case HomeTab.results:
+        break; // Not a real navigation target - see HomeTab.results above.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,32 +71,25 @@ class BottomNavBar extends StatelessWidget {
             _NavItem(
               icon: Icons.play_circle_fill_rounded,
               label: 'Play',
-              active: true,
-              onTap: () {},
+              active: activeTab == HomeTab.play,
+              onTap: () => _switchTo(context, HomeTab.play),
             ),
             _NavItem(
-              icon: Icons.bar_chart_rounded,
-              label: 'Ranks',
-              active: false,
-              onTap: () => _showComingSoon(context, 'Ranks'),
+              icon: Icons.calendar_today_rounded,
+              label: 'Daily',
+              active: activeTab == HomeTab.daily,
+              onTap: () => _switchTo(context, HomeTab.daily),
             ),
             _NavItem(
               icon: Icons.tune_rounded,
               label: 'Settings',
-              active: false,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              ),
+              active: activeTab == HomeTab.settings,
+              onTap: () => _switchTo(context, HomeTab.settings),
             ),
           ],
         ),
       ),
     );
-  }
-
-  static void _showComingSoon(BuildContext context, String label) {
-    showMessageDialog(context, '$label — coming soon');
   }
 }
 

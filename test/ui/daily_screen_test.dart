@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flame/game.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -77,10 +76,12 @@ Future<ProviderContainer> _bootApp(
 }
 
 Future<void> _openDaily(WidgetTester tester) async {
-  final dailyCard = find.widgetWithText(ElevatedButton, 'Play Daily');
-  await tester.ensureVisible(dailyCard);
+  // Daily Challenge is reached via the bottom nav's "Daily" tab, not a card
+  // on the home screen - see BottomNavBar.
+  final dailyTab = find.text('DAILY');
+  await tester.ensureVisible(dailyTab);
   await tester.pump();
-  await tester.tap(dailyCard);
+  await tester.tap(dailyTab);
   await tester.pumpAndSettle();
 }
 

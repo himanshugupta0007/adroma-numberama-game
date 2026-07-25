@@ -109,12 +109,10 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
         : Duration.zero;
 
     // A new best counts on a loss too (a high score before getting stuck is
-    // still a real achievement) - computed synchronously against the box's
-    // current value, then persisted; nothing else touches the box between
-    // these two lines, so the comparison can't go stale.
+    // still a real achievement) - registers against every best-score
+    // bucket (all-time, today, this month, this year) regardless of mode.
     final prefs = ref.read(preferencesServiceProvider);
-    final isNewBest = score > prefs.bestScore;
-    if (isNewBest) prefs.registerScore(score);
+    final isNewBest = prefs.registerRoundScore(score);
 
     var streakJustExtended = false;
     if (widget.isDaily) {

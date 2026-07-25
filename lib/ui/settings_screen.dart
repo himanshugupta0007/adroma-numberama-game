@@ -11,6 +11,7 @@ import '../widgets/dialog_card.dart';
 import '../widgets/graph_paper_background.dart';
 import '../widgets/message_dialog.dart';
 import '../widgets/settings_row.dart';
+import 'home/bottom_nav_bar.dart';
 
 /// The full Settings screen, reached from the home screen's bottom nav.
 /// Every toggle here mirrors straight to [PreferencesService] via
@@ -57,7 +58,8 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _confirmResetProgress(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmResetProgress(
+      BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => const _ResetProgressDialog(),
@@ -84,7 +86,8 @@ class SettingsScreen extends ConsumerWidget {
     );
     final launched = await launchUrl(uri);
     if (!launched && context.mounted) {
-      await showMessageDialog(context, "Couldn't open a mail app.", isError: true);
+      await showMessageDialog(context, "Couldn't open a mail app.",
+          isError: true);
     }
   }
 
@@ -94,7 +97,8 @@ class SettingsScreen extends ConsumerWidget {
       mode: LaunchMode.externalApplication,
     );
     if (!launched && context.mounted) {
-      await showMessageDialog(context, "Couldn't open the link.", isError: true);
+      await showMessageDialog(context, "Couldn't open the link.",
+          isError: true);
     }
   }
 
@@ -171,8 +175,7 @@ class SettingsScreen extends ConsumerWidget {
                         rows: [
                           SettingsRow(
                             label: 'Streak Reminder',
-                            subtitle:
-                                'Get notified before your streak resets',
+                            subtitle: 'Get notified before your streak resets',
                             trailing: _switch(
                               settings.dailyReminderEnabled,
                               (value) =>
@@ -221,8 +224,8 @@ class SettingsScreen extends ConsumerWidget {
                             // TODO(ads): reopen UMP consent form here - keep
                             // this row visible even as a stub, it's a GDPR
                             // requirement once AdMob is live.
-                            onTap: () => _showComingSoon(
-                                context, 'Ad preferences'),
+                            onTap: () =>
+                                _showComingSoon(context, 'Ad preferences'),
                           ),
                         ],
                       ),
@@ -260,8 +263,7 @@ class SettingsScreen extends ConsumerWidget {
                             trailing: _chevron(),
                             // TODO(cross-promo): no games-list screen exists
                             // yet in ui/ - navigate to it here once built.
-                            onTap: () =>
-                                _showComingSoon(context, 'More Games'),
+                            onTap: () => _showComingSoon(context, 'More Games'),
                           ),
                           SettingsRow(
                             label: 'Privacy Policy',
@@ -285,6 +287,10 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: BottomNavBar(activeTab: HomeTab.settings),
+              ),
             ],
           ),
         ),
@@ -306,7 +312,8 @@ class _ComingSoonTag extends StatelessWidget {
       ),
       child: Text(
         'Coming soon',
-        style: AppTextStyles.mono(9, weight: FontWeight.w600, color: AppColors.textLow),
+        style: AppTextStyles.mono(9,
+            weight: FontWeight.w600, color: AppColors.textLow),
       ),
     );
   }

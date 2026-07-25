@@ -7,15 +7,32 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
-import '../daily/daily_screen.dart';
 import '../gameplay/gameplay_screen.dart';
 import 'bottom_nav_bar.dart';
 import 'mode_card.dart';
 
-/// Landing screen: wordmark, streak badge, a Classic/Daily Challenge mode
-/// picker, and the app's bottom nav.
+/// Landing screen: a centered hero wordmark, a best-score summary (today's/
+/// this month's/this year's, plus the all-time best), and the Classic mode
+/// card. Daily Challenge and Settings are reached from the bottom nav, not
+/// from this screen's main content - the streak lives on the Daily
+/// Challenge screen itself, since Classic play doesn't affect it.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
+
+  static const _monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
 
   void _openGameplay(BuildContext context, GameMode mode) {
     Navigator.push(
@@ -24,16 +41,16 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  void _openDaily(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const DailyScreen()),
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final streak = ref.watch(preferencesServiceProvider).currentStreak;
+    // The score cards below can change from outside this screen entirely
+    // (a round played on the gameplay screen, or Settings' "Reset
+    // Progress") - watching the revision ticker is what makes this screen
+    // actually rebuild for that, since watching the service instance
+    // itself doesn't react to writes inside the box it wraps.
+    ref.watch(preferencesRevisionProvider);
+    final prefs = ref.watch(preferencesServiceProvider);
+    final now = DateTime.now();
     return Scaffold(
       body: GraphPaperBackground(
         child: SafeArea(
@@ -42,31 +59,18 @@ class HomeScreen extends ConsumerWidget {
             child: Column(
               children: [
                 // Fixed at the top, outside the centered section below - the
-                // wordmark/streak header shouldn't drift toward the middle
-                // of the screen along with the mode cards.
+                // wordmark header shouldn't drift toward the middle of the
+                // screen along with the mode cards.
                 Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const _WordmarkIcon(),
-                            const SizedBox(width: 10),
-                            Text('NUMBERAMA', style: AppTextStyles.heading),
-                          ],
-                        ),
-                        _StreakBadge(days: streak),
-                      ],
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 34, top: 2),
-                      child: Text(
-                        'TAP · SUM · CLEAR',
-                        style: AppTextStyles.caption,
-                      ),
-                    ),
+                    const SizedBox(height: 8),
+                    const _WordmarkIcon(size: 64),
+                    const SizedBox(height: 8),
+                    Text('NUMBERAMA',
+                        style:
+                            AppTextStyles.display(36, weight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    Text('TAP · SUM · CLEAR', style: AppTextStyles.caption),
                   ],
                 ),
                 Expanded(
@@ -74,6 +78,33 @@ class HomeScreen extends ConsumerWidget {
                     child: SingleChildScrollView(
                       child: Column(
                         children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _PeriodScoreChip(
+                                  label: "Today's",
+                                  score: prefs.todayBestScore,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _PeriodScoreChip(
+                                  label: _monthNames[now.month - 1],
+                                  score: prefs.monthBestScore,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _PeriodScoreChip(
+                                  label: '${now.year}',
+                                  score: prefs.yearBestScore,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          _BestEverCard(score: prefs.bestScore),
+                          const SizedBox(height: 18),
                           ModeCard(
                             icon: Icons.grid_view_rounded,
                             iconColor: AppColors.amber,
@@ -84,19 +115,6 @@ class HomeScreen extends ConsumerWidget {
                               label: 'Play Classic',
                               onPressed: () =>
                                   _openGameplay(context, GameMode.classic),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          ModeCard(
-                            icon: Icons.calendar_today_rounded,
-                            iconColor: AppColors.teal,
-                            title: 'Daily Challenge',
-                            description:
-                                'A new board every day. Keep the streak alive.',
-                            borderColor: AppColors.teal.withValues(alpha: 0.25),
-                            action: ElevatedButton(
-                              onPressed: () => _openDaily(context),
-                              child: const Text('Play Daily'),
                             ),
                           ),
                         ],
@@ -115,14 +133,26 @@ class HomeScreen extends ConsumerWidget {
 }
 
 class _WordmarkIcon extends StatelessWidget {
-  const _WordmarkIcon();
+  const _WordmarkIcon({this.size = 24});
+
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
-      width: 24,
-      height: 24,
-      child: CustomPaint(painter: _WordmarkPainter()),
+    // _WordmarkPainter's path/circle coordinates are hardcoded for a 24x24
+    // canvas - FittedBox scales that fixed painting up to `size` instead of
+    // needing every coordinate parameterized.
+    return SizedBox(
+      width: size,
+      height: size,
+      child: const FittedBox(
+        fit: BoxFit.contain,
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CustomPaint(painter: _WordmarkPainter()),
+        ),
+      ),
     );
   }
 }
@@ -143,35 +173,76 @@ class _WordmarkPainter extends CustomPainter {
         ..strokeWidth = 2.4
         ..strokeCap = StrokeCap.round,
     );
-    canvas.drawCircle(const Offset(4, 17), 2.6, Paint()..color = AppColors.amber);
-    canvas.drawCircle(const Offset(20, 17), 2.6, Paint()..color = AppColors.teal);
+    canvas.drawCircle(
+        const Offset(4, 17), 2.6, Paint()..color = AppColors.amber);
+    canvas.drawCircle(
+        const Offset(20, 17), 2.6, Paint()..color = AppColors.teal);
   }
 
   @override
   bool shouldRepaint(covariant _WordmarkPainter oldPainter) => false;
 }
 
-class _StreakBadge extends StatelessWidget {
-  const _StreakBadge({required this.days});
+/// One of the three small best-score chips at the top of the home screen -
+/// "Today's", "Month's", "Yearly" - each reading a period-bucketed best
+/// from [PreferencesService] (combined across Classic and Daily rounds).
+/// Sits above the more prominent all-time [_BestEverCard].
+class _PeriodScoreChip extends StatelessWidget {
+  const _PeriodScoreChip({required this.label, required this.score});
 
-  final int days;
+  final String label;
+  final int score;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text('$score', style: AppTextStyles.mono(17, color: AppColors.amber)),
+          const SizedBox(height: 2),
+          Text(label.toUpperCase(), style: AppTextStyles.caption),
+        ],
+      ),
+    );
+  }
+}
+
+/// The all-time high score - [PreferencesService.bestScore] - in its own
+/// banner beneath the smaller period chips, since it's the one number here
+/// worth calling out above the rest.
+class _BestEverCard extends StatelessWidget {
+  const _BestEverCard({required this.score});
+
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.amber.withValues(alpha: 0.25)),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Icon(Icons.local_fire_department_rounded,
-              color: AppColors.amber, size: 15),
-          const SizedBox(width: 5),
-          Text('$days', style: AppTextStyles.mono(13, color: AppColors.amber)),
+          Row(
+            children: [
+              const Icon(Icons.emoji_events_rounded,
+                  color: AppColors.amber, size: 20),
+              const SizedBox(width: 10),
+              Text('BEST EVER', style: AppTextStyles.caption),
+            ],
+          ),
+          Text('$score',
+              style: AppTextStyles.mono(22, color: AppColors.textHi)),
         ],
       ),
     );

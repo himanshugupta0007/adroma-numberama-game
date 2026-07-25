@@ -16,10 +16,49 @@ final preferencesServiceProvider = Provider<PreferencesService>((ref) {
   return PreferencesService(ref.watch(preferencesBoxProvider));
 });
 
+/// Ticks on every write to the preferences box - a `put` from any
+/// [PreferencesService] method, or every key at once from [clearAll]
+/// (Hive's `clear()` emits a deletion event per key, same as [Box.watch]
+/// does for an individual delete). [PreferencesService]'s own getters are
+/// synchronous, plain reads with no Riverpod state of their own to
+/// invalidate - a screen that only ever mutates what it itself displays
+/// (e.g. Settings' toggles, via [SettingsStateNotifier]) doesn't need
+/// this, since its own rebuild already happens through that state. But a
+/// screen showing a value that can change *outside* its own widget tree -
+/// the home screen's best-score cards after a round played on the
+/// gameplay screen, or after Settings' "Reset Progress" wipes them - has
+/// nothing else to trigger its rebuild, so it should `ref.watch` this
+/// alongside reading [preferencesServiceProvider].
+final preferencesRevisionProvider = StreamProvider<void>((ref) {
+  final box = ref.watch(preferencesBoxProvider);
+  return box.watch().map((_) {});
+});
+
 /// Thin wrapper around a Hive [Box] for the handful of durable values this
 /// app keeps locally. Centralizing key names here avoids typo'd string
 /// literals scattered across the UI - as more get added (streak, ...) this
 /// is where they'd live too.
+///
+/// This is also the app's one seam for a future cloud backend, so two
+/// invariants matter beyond just "don't typo the key string":
+///  1. Every score/streak/progress read or write goes through a method
+///     here - nothing outside this file (or [preferencesServiceProvider])
+///     touches [Box] or [Hive] directly. `grep`-checked: `package:hive` is
+///     only imported here and in `main.dart` (which just opens the box).
+///  2. Every value this class stores is a plain JSON-primitive - `int`,
+///     `bool`, `String`, `List<String>` - and dates are already-formatted
+///     period-key strings (`_dateKey`/`_monthKey`/`_yearKey`), never a raw
+///     [DateTime]. That shape maps directly onto a cloud document's
+///     fields with no translation layer.
+///
+/// When a cloud backend actually arrives, the lowest-friction shape is to
+/// keep this class's public API exactly as-is (so no call site changes)
+/// and treat Hive as a local cache: writes here also queue a push to the
+/// cloud, and a separate sync layer pulls remote changes back into the
+/// same Hive keys. That keeps every getter synchronous, which is the
+/// entire reason UI code can call them straight from `build()` without
+/// dealing with `Future`s or `AsyncValue`s - a directly cloud-backed
+/// version of this class would have to give that up.
 class PreferencesService {
   PreferencesService(this._box);
 
@@ -31,6 +70,12 @@ class PreferencesService {
 
   static const _hasSeenHowToPlayKey = 'has_seen_how_to_play';
   static const _bestScoreKey = 'best_score';
+  static const _todayBestScoreKey = 'today_best_score';
+  static const _todayBestScorePeriodKey = 'today_best_score_period';
+  static const _monthBestScoreKey = 'month_best_score';
+  static const _monthBestScorePeriodKey = 'month_best_score_period';
+  static const _yearBestScoreKey = 'year_best_score';
+  static const _yearBestScorePeriodKey = 'year_best_score_period';
   static const _lastDailyPlayedDateKey = 'last_daily_played_date';
   static const _dailyPlayedHistoryKey = 'daily_played_history';
   static const _currentStreakKey = 'current_streak';
@@ -48,16 +93,77 @@ class PreferencesService {
   Future<void> setHasSeenHowToPlay() =>
       _box.put(_hasSeenHowToPlayKey, true);
 
-  /// The highest score ever reached across all rounds, `0` if none yet.
+  /// The highest score ever reached across all rounds (Classic and Daily
+  /// combined), `0` if none yet - "BEST EVER" on the home screen.
   int get bestScore => (_box.get(_bestScoreKey) as int?) ?? 0;
 
-  /// Records [score] as the new best if it beats the current one. Returns
-  /// whether it actually was a new best, so callers (the results screen)
-  /// can show "NEW BEST" honestly instead of unconditionally.
-  Future<bool> registerScore(int score) async {
-    if (score <= bestScore) return false;
-    await _box.put(_bestScoreKey, score);
-    return true;
+  /// Highest score reached today, `0` if none yet - see [_periodBest].
+  int get todayBestScore => _periodBest(
+        _todayBestScoreKey,
+        _todayBestScorePeriodKey,
+        _dateKey(DateTime.now()),
+      );
+
+  /// Highest score reached this calendar month, `0` if none yet - see
+  /// [_periodBest].
+  int get monthBestScore => _periodBest(
+        _monthBestScoreKey,
+        _monthBestScorePeriodKey,
+        _monthKey(DateTime.now()),
+      );
+
+  /// Highest score reached this calendar year, `0` if none yet - see
+  /// [_periodBest].
+  int get yearBestScore => _periodBest(
+        _yearBestScoreKey,
+        _yearBestScorePeriodKey,
+        _yearKey(DateTime.now()),
+      );
+
+  /// Reads a period-bucketed best: the value stored at [scoreKey] only
+  /// counts if [periodKey] (stored at [periodKeyKey]) still matches
+  /// [currentPeriodKey] - otherwise the bucket has rolled over (a new
+  /// day/month/year started) and reads as `0`. Rollover is entirely
+  /// lazy - nothing needs to run when a period actually turns over, since
+  /// every read already recomputes "is the stored bucket still current".
+  int _periodBest(String scoreKey, String periodKeyKey, String currentPeriodKey) {
+    if ((_box.get(periodKeyKey) as String?) != currentPeriodKey) return 0;
+    return (_box.get(scoreKey) as int?) ?? 0;
+  }
+
+  /// Records [score] from a just-finished round (Classic and Daily both
+  /// feed the same buckets) against every best-score bucket this app
+  /// tracks - all-time, and whichever day/month/year [date] (defaults to
+  /// now) falls in. Returns whether [score] set a new all-time best, so
+  /// callers (the results screen) can show "NEW BEST" honestly.
+  bool registerRoundScore(int score, {DateTime? date}) {
+    final now = date ?? DateTime.now();
+    final isNewBest = score > bestScore;
+    if (isNewBest) _box.put(_bestScoreKey, score);
+    _updatePeriodBest(
+        _todayBestScoreKey, _todayBestScorePeriodKey, _dateKey(now), score);
+    _updatePeriodBest(
+        _monthBestScoreKey, _monthBestScorePeriodKey, _monthKey(now), score);
+    _updatePeriodBest(
+        _yearBestScoreKey, _yearBestScorePeriodKey, _yearKey(now), score);
+    return isNewBest;
+  }
+
+  /// Bumps a period bucket to [score] if it beats whatever's currently
+  /// stored for [periodKey] (per [_periodBest] - a stale, rolled-over
+  /// bucket reads as `0`, so the first score of a new period always
+  /// qualifies). A no-op otherwise, including when the period has simply
+  /// rolled over with nothing to record yet - the next [_periodBest] read
+  /// already resolves that correctly without a write here.
+  void _updatePeriodBest(
+    String scoreKey,
+    String periodKeyKey,
+    String periodKey,
+    int score,
+  ) {
+    if (score <= _periodBest(scoreKey, periodKeyKey, periodKey)) return;
+    _box.put(scoreKey, score);
+    _box.put(periodKeyKey, periodKey);
   }
 
   /// Whether the Daily Challenge board for [date]'s calendar day has
@@ -132,6 +238,15 @@ class PreferencesService {
       '${date.year}-${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
 
+  /// A calendar-month key, e.g. `'2026-07'` - every date within the same
+  /// month compares equal regardless of day.
+  String _monthKey(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}';
+
+  /// A calendar-year key, e.g. `'2026'` - every date within the same year
+  /// compares equal regardless of month or day.
+  String _yearKey(DateTime date) => '${date.year}';
+
   bool get soundEnabled => (_box.get(_soundEnabledKey) as bool?) ?? true;
   Future<void> setSoundEnabled(bool value) => _box.put(_soundEnabledKey, value);
 
@@ -154,9 +269,9 @@ class PreferencesService {
   Future<void> setColorblindPaletteEnabled(bool value) =>
       _box.put(_colorblindPaletteEnabledKey, value);
 
-  /// Wipes every durable value this app keeps locally - score, daily-played
-  /// gate, daily play history, streak, Classic round count, and every
-  /// setting above - back to first-launch defaults. Used by Settings'
-  /// "Reset Progress" action.
+  /// Wipes every durable value this app keeps locally - all-time and
+  /// period-bucketed best scores, daily-played gate, daily play history,
+  /// streak, Classic round count, and every setting above - back to
+  /// first-launch defaults. Used by Settings' "Reset Progress" action.
   Future<void> clearAll() => _box.clear();
 }
