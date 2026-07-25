@@ -104,6 +104,9 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
     final score = state.score;
     final pairs = state.moves;
     final bestCombo = state.bestCombo;
+    final elapsed = state.startedAt != null
+        ? DateTime.now().difference(state.startedAt!)
+        : Duration.zero;
 
     // A new best counts on a loss too (a high score before getting stuck is
     // still a real achievement) - computed synchronously against the box's
@@ -113,18 +116,23 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
     final isNewBest = score > prefs.bestScore;
     if (isNewBest) prefs.registerScore(score);
 
+    var streakJustExtended = false;
     if (widget.isDaily) {
       // Win or loss, today's one attempt is spent - there's no board-state
       // persistence to let a player resume an abandoned round anyway, and
       // gating on completion (not on tapping "Start") means backing out of
       // the pre-round dialogs doesn't cost an attempt.
-      prefs.registerDailyPlayed(DateTime.now());
+      streakJustExtended = prefs.registerDailyPlayed(DateTime.now());
       // Today's board is done either way (win or loss) - don't nag about a
       // streak the player already kept alive today, but leave tomorrow's
       // reminder untouched.
       ref.read(notificationServiceProvider).skipTodaysReminder();
     }
     final dailyStars = widget.isDaily ? _starsForDaily(bestCombo, won: won) : 0;
+    // Classic has no daily puzzle index of its own - this stands in for
+    // the results screen's Wordle-style "Numberama #N" share text.
+    final classicRoundNumber =
+        widget.isDaily ? 0 : prefs.registerClassicRoundPlayed();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -141,6 +149,10 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
             isDaily: widget.isDaily,
             difficulty: widget.difficulty,
             dailyStars: dailyStars,
+            elapsed: elapsed,
+            streakJustExtended: streakJustExtended,
+            classicRoundNumber: classicRoundNumber,
+            attemptHistory: state.attemptHistory,
           ),
         ),
       );

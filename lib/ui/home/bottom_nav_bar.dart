@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/message_dialog.dart';
 import '../settings_screen.dart';
 
 /// The Play/Ranks/Settings tab strip on [HomeScreen]. Play and Settings
 /// have real destinations (Daily Challenge is reached via its own card
 /// above, not this bar) - Ranks renders as an inert affordance (no screen
-/// designed for it yet) and surfaces a "coming soon" snack bar instead of
+/// designed for it yet) and surfaces a "coming soon" dialog instead of
 /// doing nothing silently on tap.
 class BottomNavBar extends StatelessWidget {
   const BottomNavBar({super.key});
@@ -63,9 +64,7 @@ class BottomNavBar extends StatelessWidget {
   }
 
   static void _showComingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label — coming soon')),
-    );
+    showMessageDialog(context, '$label — coming soon');
   }
 }
 

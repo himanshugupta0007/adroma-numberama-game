@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/dialog_card.dart';
 import '../widgets/graph_paper_background.dart';
+import '../widgets/message_dialog.dart';
 import '../widgets/settings_row.dart';
 
 /// The full Settings screen, reached from the home screen's bottom nav.
@@ -39,13 +40,11 @@ class SettingsScreen extends ConsumerWidget {
       final granted = await notifications.requestPermission();
       if (!granted) {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "Notifications are off for Numberama at the system level - "
-              'enable them in system settings to get streak reminders.',
-            ),
-          ),
+        await showMessageDialog(
+          context,
+          "Notifications are off for Numberama at the system level - "
+          'enable them in system settings to get streak reminders.',
+          isError: true,
         );
         // Leave the toggle off - state was never flipped to true.
         return;
@@ -70,15 +69,11 @@ class SettingsScreen extends ConsumerWidget {
     ref.read(settingsStateProvider.notifier).resetToDefaults();
 
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Progress reset.')),
-    );
+    await showMessageDialog(context, 'Progress reset.');
   }
 
   void _showComingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label — coming soon')),
-    );
+    showMessageDialog(context, '$label — coming soon');
   }
 
   Future<void> _sendFeedback(BuildContext context) async {
@@ -89,9 +84,7 @@ class SettingsScreen extends ConsumerWidget {
     );
     final launched = await launchUrl(uri);
     if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't open a mail app.")),
-      );
+      await showMessageDialog(context, "Couldn't open a mail app.", isError: true);
     }
   }
 
@@ -101,9 +94,7 @@ class SettingsScreen extends ConsumerWidget {
       mode: LaunchMode.externalApplication,
     );
     if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't open the link.")),
-      );
+      await showMessageDialog(context, "Couldn't open the link.", isError: true);
     }
   }
 

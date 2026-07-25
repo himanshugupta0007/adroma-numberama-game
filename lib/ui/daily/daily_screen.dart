@@ -10,14 +10,14 @@ import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
 import '../gameplay/gameplay_screen.dart';
 
-/// Daily challenge landing screen. The date, calendar-strip "today" marker,
-/// today's [Difficulty] tier, and the one-attempt-per-day gate are all
-/// real; the streak/completion status for *past* days and the preview
-/// mosaic have no backing state yet and are static placeholders. Today's
-/// board itself is a real, timed Rush round (see [GameplayScreen]) tuned to
-/// today's tier - the seed label is a stable per-date identifier, not yet a
-/// literal RNG seed, so the exact tile layout still varies between plays of
-/// the "same" seed.
+/// Daily challenge landing screen. The date, calendar-strip day markers
+/// (driven by [PreferencesService.hasEverPlayedDailyOn]), today's
+/// [Difficulty] tier, and the one-attempt-per-day gate are all real; only
+/// the preview mosaic has no backing state yet and is a static placeholder.
+/// Today's board itself is a real, timed Rush round (see [GameplayScreen])
+/// tuned to today's tier - the seed label is a stable per-date identifier,
+/// not yet a literal RNG seed, so the exact tile layout still varies
+/// between plays of the "same" seed.
 class DailyScreen extends ConsumerWidget {
   const DailyScreen({super.key});
 
@@ -50,9 +50,10 @@ class DailyScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     final todayIndex = now.weekday - 1; // 0=Mon .. 6=Sun
+    final weekStart = now.subtract(Duration(days: todayIndex));
     final difficulty = Difficulty.forDate(now);
-    final alreadyPlayed =
-        ref.watch(preferencesServiceProvider).hasPlayedDailyOn(now);
+    final prefs = ref.watch(preferencesServiceProvider);
+    final alreadyPlayed = prefs.hasPlayedDailyOn(now);
 
     return Scaffold(
       body: GraphPaperBackground(
@@ -88,15 +89,14 @@ class DailyScreen extends ConsumerWidget {
                       for (var i = 0; i < 7; i++)
                         _CalendarDay(
                           letter: _dayLetters[i],
-                          // TODO(streak): completion status for past days is
-                          // mocked - only today reflects the real
-                          // one-attempt-per-day flag.
-                          state: i < todayIndex
-                              ? _DayState.done
-                              : i == todayIndex
-                                  ? (alreadyPlayed
-                                      ? _DayState.done
-                                      : _DayState.today)
+                          state: i == todayIndex
+                              ? (alreadyPlayed
+                                  ? _DayState.done
+                                  : _DayState.today)
+                              : i < todayIndex &&
+                                      prefs.hasEverPlayedDailyOn(
+                                          weekStart.add(Duration(days: i)))
+                                  ? _DayState.done
                                   : _DayState.future,
                           label: i == todayIndex ? '${now.day}' : null,
                         ),

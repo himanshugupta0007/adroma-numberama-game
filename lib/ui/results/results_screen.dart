@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/difficulty.dart';
 import '../../state/game_mode.dart';
+import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
+import '../../widgets/message_dialog.dart';
 import '../gameplay/gameplay_screen.dart';
 
 /// Shown when a round ends, either by clearing the board ([GamePhase.won])
@@ -15,7 +18,7 @@ import '../gameplay/gameplay_screen.dart';
 /// round, passed in at the moment of transition rather than re-read from
 /// the provider (which may already have been reset for the next round by
 /// the time this screen builds).
-class ResultsScreen extends StatelessWidget {
+class ResultsScreen extends ConsumerWidget {
   const ResultsScreen({
     super.key,
     required this.score,
@@ -27,6 +30,10 @@ class ResultsScreen extends StatelessWidget {
     this.isDaily = false,
     this.difficulty = Difficulty.medium,
     this.dailyStars = 0,
+    this.elapsed = Duration.zero,
+    this.streakJustExtended = false,
+    this.classicRoundNumber = 1,
+    this.attemptHistory = const [],
   });
 
   final int score;
@@ -53,25 +60,38 @@ class ResultsScreen extends StatelessWidget {
   /// `_GameplayScreenState._starsForDaily`.
   final int dailyStars;
 
-  // TODO(stats): round timer and streak persistence don't exist yet - these
-  // are static placeholders matching the mockup.
-  static const _mockTime = '2:14';
-  static const _mockStreakDays = 15;
+  /// Real wall-clock time the round took, start to finish - see
+  /// [GameState.startedAt].
+  final Duration elapsed;
 
-  static const _blockPattern = [
-    AppColors.amber, AppColors.teal, AppColors.surfaceRaised,
-    AppColors.amber, AppColors.amber, AppColors.teal,
-    AppColors.surfaceRaised, AppColors.teal, AppColors.amber,
-    AppColors.teal, AppColors.amber, AppColors.surfaceRaised,
-    AppColors.teal, AppColors.teal, AppColors.amber,
-    AppColors.surfaceRaised, AppColors.amber, AppColors.teal,
-    AppColors.amber, AppColors.amber, AppColors.teal,
-    AppColors.surfaceRaised, AppColors.teal, AppColors.amber,
-    AppColors.teal, AppColors.surfaceRaised, AppColors.amber,
-  ];
+  /// Only meaningful when [isDaily] - whether *this* round actually
+  /// extended the streak by one (a consecutive day), per
+  /// [PreferencesService.registerDailyPlayed]'s return value. `false` when
+  /// a day was skipped and the streak restarted at 1 instead - the "+1"
+  /// badge only makes sense to show in the former case.
+  final bool streakJustExtended;
+
+  /// Classic only - this round's 1-based index among every Classic round
+  /// ever played, from [PreferencesService.registerClassicRoundPlayed].
+  /// Classic has no daily puzzle index of its own, unlike the Daily
+  /// Challenge, so this stands in for the share card's Wordle-style
+  /// "Numberama #N".
+  final int classicRoundNumber;
+
+  /// One entry per pair attempt this round, in order - see
+  /// [GameState.attemptHistory]. The share card's mosaic is built directly
+  /// from this instead of a decorative placeholder.
+  final List<bool> attemptHistory;
+
+  static String _formatElapsed(Duration elapsed) {
+    final minutes = elapsed.inMinutes;
+    final seconds = elapsed.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final streak = ref.watch(preferencesServiceProvider).currentStreak;
     return Scaffold(
       body: GraphPaperBackground(
         child: SafeArea(
@@ -80,7 +100,21 @@ class ResultsScreen extends StatelessWidget {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  const SizedBox(height: 10),
+                  // Always returns all the way to Home regardless of how
+                  // deep the stack is (Classic: Home -> Results; Daily:
+                  // Home -> Daily -> Results) - "Done for today"/"Play
+                  // again" below cover the in-flow paths, this is the one
+                  // way out of the results screen entirely.
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      onPressed: () => Navigator.of(context)
+                          .popUntil((route) => route.isFirst),
+                      icon: const Icon(Icons.home_rounded,
+                          color: AppColors.textLow),
+                      tooltip: 'Back to Home',
+                    ),
+                  ),
                   Text(
                     won
                         ? 'ROUND COMPLETE'
@@ -134,18 +168,24 @@ class ResultsScreen extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(child: _StatChip(value: '$pairs', label: 'Pairs')),
                       const SizedBox(width: 8),
-                      const Expanded(child: _StatChip(value: _mockTime, label: 'Time')),
+                      Expanded(
+                        child: _StatChip(
+                          value: _formatElapsed(elapsed),
+                          label: 'Time',
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
-                  const _StreakRow(days: _mockStreakDays),
+                  _StreakRow(days: streak, justExtended: streakJustExtended),
                   const SizedBox(height: 20),
                   _ShareCard(
-                    pattern: _blockPattern,
+                    attemptHistory: attemptHistory,
                     score: score,
                     isDaily: isDaily,
                     difficulty: difficulty,
                     dailyStars: dailyStars,
+                    classicRoundNumber: classicRoundNumber,
                   ),
                   const SizedBox(height: 22),
                   GradientButton(
@@ -170,9 +210,8 @@ class ResultsScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Sharing — coming soon')),
-                      ),
+                      onPressed: () =>
+                          showMessageDialog(context, 'Sharing — coming soon'),
                       child: const Text('Share result'),
                     ),
                   ),
@@ -235,9 +274,15 @@ class _StarsRow extends StatelessWidget {
 }
 
 class _StreakRow extends StatelessWidget {
-  const _StreakRow({required this.days});
+  const _StreakRow({required this.days, required this.justExtended});
 
   final int days;
+
+  /// Whether this specific round is what pushed the streak to [days] - see
+  /// [ResultsScreen.streakJustExtended]. Only then does the "+1" badge
+  /// actually describe what just happened, so it's the one gate on
+  /// whether it renders at all.
+  final bool justExtended;
 
   @override
   Widget build(BuildContext context) {
@@ -258,16 +303,17 @@ class _StreakRow extends StatelessWidget {
               Text('$days day streak', style: AppTextStyles.display(13)),
             ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: AppColors.teal.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(999),
+          if (justExtended)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.teal.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text('+1',
+                  style: AppTextStyles.mono(11,
+                      weight: FontWeight.w600, color: AppColors.teal)),
             ),
-            child: Text('+1',
-                style: AppTextStyles.mono(11,
-                    weight: FontWeight.w600, color: AppColors.teal)),
-          ),
         ],
       ),
     );
@@ -276,18 +322,43 @@ class _StreakRow extends StatelessWidget {
 
 class _ShareCard extends StatelessWidget {
   const _ShareCard({
-    required this.pattern,
+    required this.attemptHistory,
     required this.score,
     required this.isDaily,
     required this.difficulty,
     required this.dailyStars,
+    required this.classicRoundNumber,
   });
 
-  final List<Color> pattern;
+  final List<bool> attemptHistory;
   final int score;
   final bool isDaily;
   final Difficulty difficulty;
   final int dailyStars;
+  final int classicRoundNumber;
+
+  /// Fixed 9-wide mosaic size the card was designed for. [attemptHistory]
+  /// rarely lines up with this exactly - a short round leaves the tail
+  /// unplayed (shown dim), a long one has more attempts than cells (only
+  /// the most recent [_mosaicSize] are shown, so the mosaic reflects how
+  /// the round actually finished rather than just its opening moves).
+  static const _mosaicSize = 27;
+
+  /// Teal for a cleared pair, coral for a miss - the same success/failure
+  /// colors used elsewhere on this screen (the "NEW BEST" badge, the
+  /// "OUT OF TIME"/"NO MORE ROOM" badge) - dimmed surface for any cell
+  /// beyond how many attempts the round actually had.
+  List<Color> _mosaicColors() {
+    final recent = attemptHistory.length > _mosaicSize
+        ? attemptHistory.sublist(attemptHistory.length - _mosaicSize)
+        : attemptHistory;
+    return [
+      for (var i = 0; i < _mosaicSize; i++)
+        i < recent.length
+            ? (recent[i] ? AppColors.teal : AppColors.coral)
+            : AppColors.surfaceRaised,
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -312,7 +383,7 @@ class _ShareCard extends StatelessWidget {
             crossAxisSpacing: 4,
             mainAxisSpacing: 4,
             children: [
-              for (final color in pattern)
+              for (final color in _mosaicColors())
                 DecoratedBox(
                   decoration: BoxDecoration(
                     color: color,
@@ -327,7 +398,7 @@ class _ShareCard extends StatelessWidget {
                 ? 'Numberama Daily · ${dailySeedLabel(DateTime.now())} · '
                     '${difficulty.label} · ${'★' * dailyStars}'
                     '${'☆' * (3 - dailyStars)}'
-                : 'Numberama #142 · $score pts',
+                : 'Numberama #$classicRoundNumber · $score pts',
             style: AppTextStyles.caption,
           ),
         ],

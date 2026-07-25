@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/game_mode.dart';
+import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/gradient_button.dart';
@@ -12,11 +14,8 @@ import 'mode_card.dart';
 
 /// Landing screen: wordmark, streak badge, a Classic/Daily Challenge mode
 /// picker, and the app's bottom nav.
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
-
-  // TODO(streak): no streak tracking exists yet - static placeholder.
-  static const _mockStreakDays = 14;
 
   void _openGameplay(BuildContext context, GameMode mode) {
     Navigator.push(
@@ -33,7 +32,8 @@ class HomeScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final streak = ref.watch(preferencesServiceProvider).currentStreak;
     return Scaffold(
       body: GraphPaperBackground(
         child: SafeArea(
@@ -57,7 +57,7 @@ class HomeScreen extends StatelessWidget {
                             Text('NUMBERAMA', style: AppTextStyles.heading),
                           ],
                         ),
-                        const _StreakBadge(days: _mockStreakDays),
+                        _StreakBadge(days: streak),
                       ],
                     ),
                     Padding(

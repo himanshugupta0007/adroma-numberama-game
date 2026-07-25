@@ -5,6 +5,7 @@ import '../../game/selection_manager.dart';
 import '../../state/game_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/message_dialog.dart';
 
 /// The power-up strip: shuffle and hint each get one free use per round,
 /// ad-gated after (see [_handleShuffleTap]/[_handleHintTap]). Both slots
@@ -52,9 +53,7 @@ class _PowerBarState extends ConsumerState<PowerBar> {
       }
       // No ad SDK wired up yet - honest placeholder, same pattern as the
       // results screen's "Share result" button.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Watch an ad for a shuffle — coming soon')),
-      );
+      showMessageDialog(context, 'Watch an ad for a shuffle — coming soon');
     }
 
     void handleHintTap() {
@@ -64,9 +63,7 @@ class _PowerBarState extends ConsumerState<PowerBar> {
         return;
       }
       // Same honest placeholder as shuffle above - no ad SDK wired up yet.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Watch an ad for a hint — coming soon')),
-      );
+      showMessageDialog(context, 'Watch an ad for a hint — coming soon');
     }
 
     return Container(

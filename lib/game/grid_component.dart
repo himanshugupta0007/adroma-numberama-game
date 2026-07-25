@@ -182,9 +182,10 @@ class GridComponent extends PositionComponent with HasGameReference {
   /// no frame tick in between, so there's nothing to smoothly animate from
   /// anyway) and `true` for every in-round row added while the player watches.
   ///
-  /// Each value is rolled to differ from its left neighbor and from the
-  /// tile directly above it (see [_nextTileValue]) - an equal-value pair
-  /// sitting right next to each other would be spottable at a glance,
+  /// Each value is rolled to differ from every already-placed neighbor
+  /// touching its cell - left, directly above, and both above-diagonals
+  /// (see [_nextTileValue]) - an equal-value pair sitting right next to
+  /// each other, including diagonally, would be spottable at a glance,
   /// which trivializes the puzzle. This only rules out adjacency, not the
   /// pair existing on the board at all: it's still just as easy to find by
   /// looking, just not for free.
@@ -209,11 +210,12 @@ class GridComponent extends PositionComponent with HasGameReference {
 
   /// Rolls a random 1..[maxTileValue] value for the cell at [col] in the
   /// row currently being built, excluding whatever sits immediately to its
-  /// left (already in [row]) and immediately above it (in [rowAbove], the
-  /// previous row - `null` for the very first row). Excluding at most two
-  /// values out of the allowed range always leaves a non-empty pool (the
-  /// narrowest range, [maxTileValue] 5, still leaves 3), so this can pick
-  /// directly from the allowed set instead of rerolling.
+  /// left (already in [row]) and every already-placed neighbor directly
+  /// above it (in [rowAbove], the previous row - `null` for the very first
+  /// row): straight above plus both above-diagonals. Falls back to just
+  /// excluding left/above (guaranteed to leave a non-empty pool even at
+  /// the narrowest range, [maxTileValue] 5) on the rare board where all
+  /// four neighbors already cover every value in range.
   int _nextTileValue({
     required int col,
     required List<TileComponent?> row,
@@ -222,13 +224,31 @@ class GridComponent extends PositionComponent with HasGameReference {
     final left = col > 0 ? row[col - 1]?.value : null;
     final above =
         (rowAbove != null && col < rowAbove.length) ? rowAbove[col]?.value : null;
-    final excluded = {if (left != null) left, if (above != null) above};
+    final aboveLeft =
+        (rowAbove != null && col > 0 && col - 1 < rowAbove.length)
+            ? rowAbove[col - 1]?.value
+            : null;
+    final aboveRight =
+        (rowAbove != null && col + 1 < rowAbove.length) ? rowAbove[col + 1]?.value : null;
 
+    final excluded = {
+      if (left != null) left,
+      if (above != null) above,
+      if (aboveLeft != null) aboveLeft,
+      if (aboveRight != null) aboveRight,
+    };
     final allowed = [
       for (var value = 1; value <= maxTileValue; value++)
         if (!excluded.contains(value)) value,
     ];
-    return allowed[_random.nextInt(allowed.length)];
+    if (allowed.isNotEmpty) return allowed[_random.nextInt(allowed.length)];
+
+    final relaxedExcluded = {if (left != null) left, if (above != null) above};
+    final relaxed = [
+      for (var value = 1; value <= maxTileValue; value++)
+        if (!relaxedExcluded.contains(value)) value,
+    ];
+    return relaxed[_random.nextInt(relaxed.length)];
   }
 
   /// Fills the *entire* board in one shot - every one of [maxRows] x

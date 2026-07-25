@@ -18,11 +18,19 @@ class GameState {
     this.hintAvailable = true,
     this.consecutiveMisses = 0,
     this.rushSecondsRemaining,
+    this.startedAt,
+    this.attemptHistory = const [],
   });
 
   final int score;
   final int moves;
   final GamePhase phase;
+
+  /// Wall-clock moment [GameStateNotifier.startGame] was called - `null`
+  /// only before the very first round starts. The results screen reads
+  /// `DateTime.now().difference(startedAt)` at the moment a round ends to
+  /// show a real elapsed time instead of a guess.
+  final DateTime? startedAt;
 
   /// Consecutive valid pairs cleared with no invalid attempt in between.
   /// Resets to 0 the moment a wrong pair is tapped.
@@ -53,6 +61,12 @@ class GameState {
   /// by [NumberamaGame]; the HUD's countdown display reads this directly.
   final int? rushSecondsRemaining;
 
+  /// One entry per pair attempt this round, in order: `true` for a valid
+  /// pair cleared, `false` for an invalid attempt. The results screen's
+  /// share card mosaic is built directly from this, so it reflects how the
+  /// round actually went instead of a decorative placeholder.
+  final List<bool> attemptHistory;
+
   GameState copyWith({
     int? score,
     int? moves,
@@ -63,6 +77,8 @@ class GameState {
     bool? hintAvailable,
     int? consecutiveMisses,
     int? rushSecondsRemaining,
+    DateTime? startedAt,
+    List<bool>? attemptHistory,
   }) {
     return GameState(
       score: score ?? this.score,
@@ -74,12 +90,14 @@ class GameState {
       hintAvailable: hintAvailable ?? this.hintAvailable,
       consecutiveMisses: consecutiveMisses ?? this.consecutiveMisses,
       rushSecondsRemaining: rushSecondsRemaining ?? this.rushSecondsRemaining,
+      startedAt: startedAt ?? this.startedAt,
+      attemptHistory: attemptHistory ?? this.attemptHistory,
     );
   }
 
   @override
   String toString() =>
-      'GameState(score: $score, moves: $moves, phase: $phase, combo: $combo, bestCombo: $bestCombo, shuffleAvailable: $shuffleAvailable, hintAvailable: $hintAvailable, consecutiveMisses: $consecutiveMisses, rushSecondsRemaining: $rushSecondsRemaining)';
+      'GameState(score: $score, moves: $moves, phase: $phase, combo: $combo, bestCombo: $bestCombo, shuffleAvailable: $shuffleAvailable, hintAvailable: $hintAvailable, consecutiveMisses: $consecutiveMisses, rushSecondsRemaining: $rushSecondsRemaining, startedAt: $startedAt, attemptHistory: $attemptHistory)';
 }
 
 class GameStateNotifier extends StateNotifier<GameState> {
@@ -108,6 +126,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
       shuffleAvailable: powerUpsEnabled,
       hintAvailable: powerUpsEnabled,
       rushSecondsRemaining: rushSecondsRemaining,
+      startedAt: DateTime.now(),
     );
   }
 
@@ -136,6 +155,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
       combo: newCombo,
       bestCombo: newCombo > state.bestCombo ? newCombo : state.bestCombo,
       consecutiveMisses: 0,
+      attemptHistory: [...state.attemptHistory, true],
     );
   }
 
@@ -151,7 +171,10 @@ class GameStateNotifier extends StateNotifier<GameState> {
   /// drives scoring) reset on different events - a power-up use clears the
   /// former but not the latter.
   void registerInvalidAttempt() {
-    state = state.copyWith(consecutiveMisses: state.consecutiveMisses + 1);
+    state = state.copyWith(
+      consecutiveMisses: state.consecutiveMisses + 1,
+      attemptHistory: [...state.attemptHistory, false],
+    );
   }
 
   /// Spends the round's free shuffle. Idempotent - calling it again once

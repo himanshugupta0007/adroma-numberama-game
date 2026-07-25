@@ -32,6 +32,9 @@ class PreferencesService {
   static const _hasSeenHowToPlayKey = 'has_seen_how_to_play';
   static const _bestScoreKey = 'best_score';
   static const _lastDailyPlayedDateKey = 'last_daily_played_date';
+  static const _dailyPlayedHistoryKey = 'daily_played_history';
+  static const _currentStreakKey = 'current_streak';
+  static const _classicRoundsPlayedKey = 'classic_rounds_played';
   static const _soundEnabledKey = 'sound_enabled';
   static const _hapticsEnabledKey = 'haptics_enabled';
   static const _dailyReminderEnabledKey = 'daily_reminder_enabled';
@@ -63,10 +66,65 @@ class PreferencesService {
   bool hasPlayedDailyOn(DateTime date) =>
       _box.get(_lastDailyPlayedDateKey) == _dateKey(date);
 
+  List<String> get _dailyPlayedHistory =>
+      (_box.get(_dailyPlayedHistoryKey) as List?)?.cast<String>() ?? const [];
+
+  /// Whether [date]'s calendar day has ever been played, per full history -
+  /// unlike [hasPlayedDailyOn] (which only gates *today's* one attempt),
+  /// this is what the calendar strip's per-day checkmarks are driven from.
+  bool hasEverPlayedDailyOn(DateTime date) =>
+      _dailyPlayedHistory.contains(_dateKey(date));
+
+  /// Consecutive calendar days the Daily Challenge has been played, `0` if
+  /// none yet. Win or loss both keep it alive, matching [hasPlayedDailyOn]
+  /// - it's a "showed up" streak, not a "won" streak.
+  int get currentStreak => (_box.get(_currentStreakKey) as int?) ?? 0;
+
   /// Records [date]'s calendar day as the daily round just played, so
-  /// [hasPlayedDailyOn] locks out a retry for the rest of that day.
-  Future<void> registerDailyPlayed(DateTime date) =>
-      _box.put(_lastDailyPlayedDateKey, _dateKey(date));
+  /// [hasPlayedDailyOn] locks out a retry for the rest of that day, and
+  /// updates [currentStreak]: incremented if [date] is the calendar day
+  /// right after the last played date, restarted at 1 if a day was
+  /// skipped (or this is the first daily round ever). A repeat call for a
+  /// date already recorded as played is a no-op, so this stays safe to
+  /// call more than once for the same day.
+  ///
+  /// Returns whether [date] actually extended the streak by one (a
+  /// consecutive day) - `false` if a day was skipped and the streak
+  /// restarted at 1, or if [date] was already recorded. The results
+  /// screen uses this to show its "+1" streak badge only when it's true,
+  /// rather than unconditionally.
+  bool registerDailyPlayed(DateTime date) {
+    final todayKey = _dateKey(date);
+    final previousKey = _box.get(_lastDailyPlayedDateKey) as String?;
+    if (previousKey == todayKey) return false;
+
+    final yesterdayKey = _dateKey(date.subtract(const Duration(days: 1)));
+    final isConsecutive = previousKey == yesterdayKey;
+    _box.put(_currentStreakKey, isConsecutive ? currentStreak + 1 : 1);
+    _box.put(_lastDailyPlayedDateKey, todayKey);
+
+    final history = _dailyPlayedHistory;
+    if (!history.contains(todayKey)) {
+      _box.put(_dailyPlayedHistoryKey, [...history, todayKey]);
+    }
+    return isConsecutive;
+  }
+
+  /// Total Classic rounds played (win or loss), `0` if none yet. Classic
+  /// has no daily puzzle index of its own, unlike the Daily Challenge -
+  /// the results screen's share card uses this as a Wordle-style round
+  /// number ("Numberama #N") instead of a hardcoded placeholder.
+  int get classicRoundsPlayed =>
+      (_box.get(_classicRoundsPlayedKey) as int?) ?? 0;
+
+  /// Records another Classic round as played and returns the new count,
+  /// synchronously - mirrors [registerDailyPlayed]'s pattern so the
+  /// results screen can use the just-incremented number immediately.
+  int registerClassicRoundPlayed() {
+    final next = classicRoundsPlayed + 1;
+    _box.put(_classicRoundsPlayedKey, next);
+    return next;
+  }
 
   /// A calendar-day key (not wall-clock time) - two calls on the same date
   /// always compare equal regardless of what time of day each was made.
@@ -96,8 +154,9 @@ class PreferencesService {
   Future<void> setColorblindPaletteEnabled(bool value) =>
       _box.put(_colorblindPaletteEnabledKey, value);
 
-  /// Wipes every durable value this app keeps locally - score, streak gate,
-  /// and every setting above - back to first-launch defaults. Used by
-  /// Settings' "Reset Progress" action.
+  /// Wipes every durable value this app keeps locally - score, daily-played
+  /// gate, daily play history, streak, Classic round count, and every
+  /// setting above - back to first-launch defaults. Used by Settings'
+  /// "Reset Progress" action.
   Future<void> clearAll() => _box.clear();
 }
