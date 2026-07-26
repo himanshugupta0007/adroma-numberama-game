@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../services/audio_service.dart';
 import '../state/game_state.dart';
 import 'grid_component.dart';
 import 'tile_component.dart';
@@ -74,7 +75,7 @@ class SelectionManager {
 
   Future<void> _handleValidPair(
       TileComponent tile1, TileComponent tile2) async {
-    // TODO(sound): trigger "valid match" sound/fanfare here.
+    AudioService.instance.playMatch();
     await Future.wait([
       tile1.playClearAnimation(),
       tile2.playClearAnimation(),
@@ -88,7 +89,7 @@ class SelectionManager {
     gameStateNotifier.incrementMoves();
 
     if (grid.isEmpty) {
-      // TODO(sound): trigger "board cleared / win" sound here.
+      AudioService.instance.playGameOver();
       gameStateNotifier.setPhase(GamePhase.won);
       return;
     }
@@ -107,11 +108,13 @@ class SelectionManager {
     // round is lost - there's no more room to refill into.
     while (!_hasAnyValidPair()) {
       if (!grid.canAddRow) {
-        // TODO(sound): trigger "board full / game over" sound here.
+        AudioService.instance.playGameOver();
         gameStateNotifier.setPhase(GamePhase.lost);
         return;
       }
-      // TODO(sound): trigger "new row added" sound here.
+      // TODO(sound): trigger "new row added" sound here - needs a
+      // dedicated clip; the existing SFX aren't a good fit for a passive
+      // event that can repeat every few seconds all round.
       grid.addRow();
     }
   }
@@ -122,6 +125,7 @@ class SelectionManager {
   /// acceptable result - re-rolling into a board with no valid pair at all
   /// would make the power-up actively hurt the player.
   Future<void> shuffle() {
+    AudioService.instance.playPowerUp();
     return grid.shuffleTileValues(isAcceptable: _hasValidPairAmong);
   }
 
@@ -135,6 +139,7 @@ class SelectionManager {
     for (var i = 0; i < tiles.length; i++) {
       for (var j = i + 1; j < tiles.length; j++) {
         if (_isValidPair(tiles[i].value, tiles[j].value)) {
+          AudioService.instance.playPowerUp();
           await Future.wait([
             tiles[i].playHintAnimation(),
             tiles[j].playHintAnimation(),
@@ -164,7 +169,7 @@ class SelectionManager {
   }
 
   void _handleInvalidPair(TileComponent tile1, TileComponent tile2) {
-    // TODO(sound): trigger "invalid pair" sound effect here.
+    AudioService.instance.playMismatch();
     // Clear immediately (not after the shake) - _evaluateSelection is
     // synchronous, so there's no real "pending" frame to show the arc for,
     // and leaving it up during the shake would show it frozen at stale

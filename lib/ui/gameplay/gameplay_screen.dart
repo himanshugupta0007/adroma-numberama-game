@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/numberama_game.dart';
+import '../../services/audio_service.dart';
 import '../../services/notification_service.dart';
 import '../../state/difficulty.dart';
 import '../../state/game_mode.dart';
@@ -61,6 +62,11 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
     // and runs safely outside Flutter's build phase (it's Flame's own
     // async lifecycle, not a widget one).
     final notifier = ref.read(gameStateProvider.notifier);
+    // Captured once per round, same as difficulty/isDaily below - Flame's
+    // game-object tree has no reachable Riverpod ref to read this live.
+    AudioService.instance.setEnabled(
+      ref.read(preferencesServiceProvider).soundEnabled,
+    );
     _game = NumberamaGame(
       gameStateNotifier: notifier,
       difficulty: widget.difficulty,
@@ -520,7 +526,8 @@ class _PauseDialog extends StatelessWidget {
           const Icon(Icons.pause_circle_filled_rounded,
               color: AppColors.amber, size: 48),
           const SizedBox(height: 12),
-          Text('Paused', style: AppTextStyles.display(20, weight: FontWeight.w700)),
+          Text('Paused',
+              style: AppTextStyles.display(20, weight: FontWeight.w700)),
           const SizedBox(height: 20),
           GradientButton(label: 'Resume', onPressed: onResume),
         ],

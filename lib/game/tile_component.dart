@@ -91,7 +91,9 @@ class TileComponent extends PositionComponent with TapCallbacks {
   void onTapDown(TapDownEvent event) {
     // Ignore taps while an animation owns this tile's state.
     if (visualState == TileVisualState.clearing) return;
-    // TODO(sound): trigger tile-tap sound effect here.
+    // TODO(sound): trigger tile-tap sound effect here - needs a dedicated
+    // clip; every existing SFX already fires on the 2nd tile of a pair
+    // (match/mismatch), so reusing one here would double up on that tap.
     onTileTapped(this);
   }
 
@@ -118,7 +120,8 @@ class TileComponent extends PositionComponent with TapCallbacks {
   /// stagger many tiles without their effects colliding.
   Future<void> playShuffleAnimation(int newValue) {
     final completer = Completer<void>();
-    // TODO(sound): trigger "shuffle" sound effect here.
+    // Sound plays once per shuffle in SelectionManager.shuffle(), not once
+    // per tile here.
     add(
       ScaleEffect.to(
         Vector2(0, 1),
@@ -147,7 +150,8 @@ class TileComponent extends PositionComponent with TapCallbacks {
   Future<void> playHintAnimation() {
     final completer = Completer<void>();
     isHinted = true;
-    // TODO(sound): trigger "hint" sound effect here.
+    // Sound plays once per hint in SelectionManager.hint(), not once per
+    // tile here.
     add(
       ScaleEffect.to(
         Vector2.all(1.12),
@@ -172,7 +176,8 @@ class TileComponent extends PositionComponent with TapCallbacks {
   Future<void> playClearAnimation() {
     visualState = TileVisualState.clearing;
     final completer = Completer<void>();
-    // TODO(sound): trigger "match cleared" sound effect here.
+    // Sound plays once per pair in SelectionManager._handleValidPair, not
+    // once per tile here.
     add(
       ScaleEffect.to(
         Vector2.zero(),
@@ -192,7 +197,8 @@ class TileComponent extends PositionComponent with TapCallbacks {
   void playShakeAnimation({VoidCallback? onComplete}) {
     visualState = TileVisualState.shaking;
     final shakeDistance = size.x * 0.08;
-    // TODO(sound): trigger "invalid pair" sound effect here.
+    // Sound plays once per pair in SelectionManager._handleInvalidPair,
+    // not once per tile here.
     add(
       MoveEffect.by(
         Vector2(shakeDistance, 0),
