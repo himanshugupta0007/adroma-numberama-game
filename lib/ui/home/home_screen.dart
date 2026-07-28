@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
+import '../../widgets/wordmark_icon.dart';
 import '../gameplay/gameplay_screen.dart';
 import 'bottom_nav_bar.dart';
 import 'mode_card.dart';
@@ -64,7 +65,7 @@ class HomeScreen extends ConsumerWidget {
                 Column(
                   children: [
                     const SizedBox(height: 8),
-                    const _WordmarkIcon(size: 64),
+                    const WordmarkIcon(size: 64),
                     const SizedBox(height: 8),
                     Text('NUMBERAMA',
                         style:
@@ -130,57 +131,6 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
-}
-
-class _WordmarkIcon extends StatelessWidget {
-  const _WordmarkIcon({this.size = 24});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    // _WordmarkPainter's path/circle coordinates are hardcoded for a 24x24
-    // canvas - FittedBox scales that fixed painting up to `size` instead of
-    // needing every coordinate parameterized.
-    return SizedBox(
-      width: size,
-      height: size,
-      child: const FittedBox(
-        fit: BoxFit.contain,
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CustomPaint(painter: _WordmarkPainter()),
-        ),
-      ),
-    );
-  }
-}
-
-class _WordmarkPainter extends CustomPainter {
-  const _WordmarkPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(4, 17)
-      ..quadraticBezierTo(12, 4, 20, 17);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = AppColors.amber
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.4
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.drawCircle(
-        const Offset(4, 17), 2.6, Paint()..color = AppColors.amber);
-    canvas.drawCircle(
-        const Offset(20, 17), 2.6, Paint()..color = AppColors.teal);
-  }
-
-  @override
-  bool shouldRepaint(covariant _WordmarkPainter oldPainter) => false;
 }
 
 /// One of the three small best-score chips at the top of the home screen -

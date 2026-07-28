@@ -1,5 +1,9 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../state/difficulty.dart';
 import '../../state/game_mode.dart';
@@ -9,6 +13,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
 import '../../widgets/message_dialog.dart';
+import '../../widgets/wordmark_icon.dart';
 import '../gameplay/gameplay_screen.dart';
 import '../home/bottom_nav_bar.dart';
 
@@ -19,7 +24,7 @@ import '../home/bottom_nav_bar.dart';
 /// round, passed in at the moment of transition rather than re-read from
 /// the provider (which may already have been reset for the next round by
 /// the time this screen builds).
-class ResultsScreen extends ConsumerWidget {
+class ResultsScreen extends ConsumerStatefulWidget {
   const ResultsScreen({
     super.key,
     required this.score,
@@ -91,7 +96,62 @@ class ResultsScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ResultsScreen> createState() => _ResultsScreenState();
+}
+
+class _ResultsScreenState extends ConsumerState<ResultsScreen> {
+  /// Bound to the [RepaintBoundary] wrapping [_ShareCard] so [_shareResult]
+  /// can rasterize exactly what's on screen - the mosaic, score, and
+  /// branding all render the same way for the share image as they do here,
+  /// with no separate "share layout" to keep in sync.
+  final _shareCardKey = GlobalKey();
+
+  bool _isSharing = false;
+
+  Future<void> _shareResult() async {
+    if (_isSharing) return;
+    setState(() => _isSharing = true);
+    try {
+      final boundary = _shareCardKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      // Higher than 1:1 device pixel ratio so the exported PNG stays crisp
+      // once it lands in a social app's own preview/crop, which typically
+      // upscales rather than shrinks a phone-sized screenshot.
+      final image = await boundary?.toImage(pixelRatio: 3);
+      final byteData =
+          await image?.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) throw StateError('card not ready');
+      final bytes = byteData.buffer.asUint8List();
+
+      final text = widget.isDaily
+          ? "I scored ${widget.dailyStars}/3 stars on today's Numberama "
+              "Daily (${widget.difficulty.label})! Can you beat me?"
+          : 'I scored ${widget.score} points in Numberama! Can you beat me?';
+
+      await SharePlus.instance.share(
+        ShareParams(
+          text: text,
+          files: [
+            XFile.fromData(
+              bytes,
+              mimeType: 'image/png',
+              name: 'numberama-result.png',
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        await showMessageDialog(context, 'Could not share result.',
+            isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final streak = ref.watch(preferencesServiceProvider).currentStreak;
     return Scaffold(
       body: GraphPaperBackground(
@@ -120,13 +180,15 @@ class ResultsScreen extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          won
+                          widget.won
                               ? 'ROUND COMPLETE'
-                              : (isDaily ? "TIME'S UP" : 'BOARD FULL'),
+                              : (widget.isDaily
+                                  ? "TIME'S UP"
+                                  : 'BOARD FULL'),
                           style: AppTextStyles.caption,
                         ),
                         const SizedBox(height: 8),
-                        Text('$score',
+                        Text('${widget.score}',
                             style: AppTextStyles.mono(46,
                                 color: AppColors.textHi)),
                         const SizedBox(height: 8),
@@ -134,7 +196,7 @@ class ResultsScreen extends ConsumerWidget {
                         // stuck is still worth celebrating if the score that got
                         // you there beat everything before it. A win with no new
                         // best shows neither badge.
-                        if (isNewBest)
+                        if (widget.isNewBest)
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 4),
@@ -147,7 +209,7 @@ class ResultsScreen extends ConsumerWidget {
                                     weight: FontWeight.w600,
                                     color: AppColors.teal)),
                           )
-                        else if (!won)
+                        else if (!widget.won)
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 4),
@@ -156,14 +218,16 @@ class ResultsScreen extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
-                                isDaily ? 'OUT OF TIME' : 'NO MORE ROOM',
+                                widget.isDaily
+                                    ? 'OUT OF TIME'
+                                    : 'NO MORE ROOM',
                                 style: AppTextStyles.mono(10.5,
                                     weight: FontWeight.w600,
                                     color: AppColors.coral)),
                           ),
-                        if (isDaily) ...[
+                        if (widget.isDaily) ...[
                           const SizedBox(height: 10),
-                          _StarsRow(stars: dailyStars),
+                          _StarsRow(stars: widget.dailyStars),
                         ],
                         const SizedBox(height: 20),
                         Row(
@@ -172,18 +236,20 @@ class ResultsScreen extends ConsumerWidget {
                             // a round with zero pairs cleared still reads "x1".
                             Expanded(
                               child: _StatChip(
-                                value: 'x${bestCombo == 0 ? 1 : bestCombo}',
+                                value:
+                                    'x${widget.bestCombo == 0 ? 1 : widget.bestCombo}',
                                 label: 'Combo',
                               ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
-                                child:
-                                    _StatChip(value: '$pairs', label: 'Pairs')),
+                                child: _StatChip(
+                                    value: '${widget.pairs}', label: 'Pairs')),
                             const SizedBox(width: 8),
                             Expanded(
                               child: _StatChip(
-                                value: _formatElapsed(elapsed),
+                                value:
+                                    ResultsScreen._formatElapsed(widget.elapsed),
                                 label: 'Time',
                               ),
                             ),
@@ -191,31 +257,38 @@ class ResultsScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 20),
                         _StreakRow(
-                            days: streak, justExtended: streakJustExtended),
+                            days: streak,
+                            justExtended: widget.streakJustExtended),
                         const SizedBox(height: 20),
-                        _ShareCard(
-                          attemptHistory: attemptHistory,
-                          score: score,
-                          isDaily: isDaily,
-                          difficulty: difficulty,
-                          dailyStars: dailyStars,
-                          classicRoundNumber: classicRoundNumber,
+                        RepaintBoundary(
+                          key: _shareCardKey,
+                          child: _ShareCard(
+                            attemptHistory: widget.attemptHistory,
+                            score: widget.score,
+                            isDaily: widget.isDaily,
+                            difficulty: widget.difficulty,
+                            dailyStars: widget.dailyStars,
+                            classicRoundNumber: widget.classicRoundNumber,
+                          ),
                         ),
                         const SizedBox(height: 22),
                         GradientButton(
                           // The daily board is one attempt only - there's nothing
                           // to replay, so this just returns to the Daily
                           // Challenge screen instead of starting a fresh round.
-                          label: isDaily ? 'Done for today' : 'Play again',
+                          label: widget.isDaily
+                              ? 'Done for today'
+                              : 'Play again',
                           onPressed: () {
-                            if (isDaily) {
+                            if (widget.isDaily) {
                               Navigator.pop(context);
                               return;
                             }
                             Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => GameplayScreen(mode: mode),
+                                builder: (_) =>
+                                    GameplayScreen(mode: widget.mode),
                               ),
                             );
                           },
@@ -224,9 +297,15 @@ class ResultsScreen extends ConsumerWidget {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: () => showMessageDialog(
-                                context, 'Sharing — coming soon'),
-                            child: const Text('Share result'),
+                            onPressed: _isSharing ? null : _shareResult,
+                            child: _isSharing
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Text('Share result'),
                           ),
                         ),
                       ],
@@ -390,10 +469,37 @@ class _ShareCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Share your run',
-              style: AppTextStyles.display(12.5,
-                  weight: FontWeight.w500, color: AppColors.textMid)),
-          const SizedBox(height: 10),
+          // App branding, so the card reads as "Numberama" on its own once
+          // it's out in a chat/feed, detached from the app it was shared from.
+          Row(
+            children: [
+              const WordmarkIcon(size: 20),
+              const SizedBox(width: 8),
+              Text('NUMBERAMA',
+                  style: AppTextStyles.display(13,
+                      weight: FontWeight.w700, color: AppColors.textHi)),
+              const Spacer(),
+              Text(isDaily ? 'DAILY CHALLENGE' : 'CLASSIC',
+                  style: AppTextStyles.caption),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Score (or stars, for Daily) front and center - the headline
+          // number is the whole point of a result card.
+          Center(
+            child: Column(
+              children: [
+                if (isDaily) ...[
+                  _StarsRow(stars: dailyStars),
+                  const SizedBox(height: 6),
+                ],
+                Text('$score',
+                    style: AppTextStyles.mono(34, color: AppColors.textHi)),
+                Text('POINTS', style: AppTextStyles.caption),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           GridView.count(
             crossAxisCount: 9,
             shrinkWrap: true,
@@ -414,9 +520,8 @@ class _ShareCard extends StatelessWidget {
           Text(
             isDaily
                 ? 'Numberama Daily · ${dailySeedLabel(DateTime.now())} · '
-                    '${difficulty.label} · ${'★' * dailyStars}'
-                    '${'☆' * (3 - dailyStars)}'
-                : 'Numberama #$classicRoundNumber · $score pts',
+                    '${difficulty.label}'
+                : 'Numberama #$classicRoundNumber',
             style: AppTextStyles.caption,
           ),
         ],

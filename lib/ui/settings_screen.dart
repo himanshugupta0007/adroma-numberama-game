@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/notification_service.dart';
@@ -17,7 +18,7 @@ import 'home/bottom_nav_bar.dart';
 /// Every toggle here mirrors straight to [PreferencesService] via
 /// [settingsStateProvider] - see that file for why the Streak Reminder
 /// toggle is the one exception driven from this screen instead.
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   // TODO: replace with real support email
@@ -28,6 +29,30 @@ class SettingsScreen extends ConsumerWidget {
 
   // TODO: wire up package_info_plus for a real version string
   static const _appVersion = 'v0.1.0';
+
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _isSharingApp = false;
+
+  Future<void> _shareApp() async {
+    if (_isSharingApp) return;
+    setState(() => _isSharingApp = true);
+    try {
+      const text = 'I love playing Numberama, a number-matching puzzle '
+          "game - you should give it a try!";
+      await SharePlus.instance.share(ShareParams(text: text));
+    } catch (_) {
+      if (mounted) {
+        await showMessageDialog(context, 'Could not share Numberama.',
+            isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _isSharingApp = false);
+    }
+  }
 
   Future<void> _handleReminderToggle(
     BuildContext context,
@@ -81,7 +106,7 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _sendFeedback(BuildContext context) async {
     final uri = Uri(
       scheme: 'mailto',
-      path: _supportEmail,
+      path: SettingsScreen._supportEmail,
       queryParameters: {'subject': 'Numberama feedback'},
     );
     final launched = await launchUrl(uri);
@@ -93,7 +118,7 @@ class SettingsScreen extends ConsumerWidget {
 
   Future<void> _openPrivacyPolicy(BuildContext context) async {
     final launched = await launchUrl(
-      Uri.parse(_privacyPolicyUrl),
+      Uri.parse(SettingsScreen._privacyPolicyUrl),
       mode: LaunchMode.externalApplication,
     );
     if (!launched && context.mounted) {
@@ -114,7 +139,7 @@ class SettingsScreen extends ConsumerWidget {
       const Icon(Icons.chevron_right_rounded, color: AppColors.textLow);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final settings = ref.watch(settingsStateProvider);
     final settingsNotifier = ref.read(settingsStateProvider.notifier);
 
@@ -243,6 +268,26 @@ class SettingsScreen extends ConsumerWidget {
                         ],
                       ),
                       const SizedBox(height: 24),
+                      const SettingsSectionHeader('Share'),
+                      const SizedBox(height: 12),
+                      SettingsSectionCard(
+                        rows: [
+                          SettingsRow(
+                            label: 'Share Numberama',
+                            subtitle: 'Invite friends to play',
+                            trailing: _isSharingApp
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : _chevron(),
+                            onTap: _isSharingApp ? null : _shareApp,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
                       const SettingsSectionHeader('About'),
                       SettingsSectionCard(
                         rows: [
@@ -275,7 +320,7 @@ class SettingsScreen extends ConsumerWidget {
                       const SizedBox(height: 28),
                       Center(
                         child: Text(
-                          'Adhroma Games · $_appVersion',
+                          'Adhroma Games · ${SettingsScreen._appVersion}',
                           style: AppTextStyles.mono(
                             10.5,
                             weight: FontWeight.w500,
