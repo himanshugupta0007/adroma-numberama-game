@@ -84,7 +84,6 @@ class PreferencesService {
   static const _hapticsEnabledKey = 'haptics_enabled';
   static const _dailyReminderEnabledKey = 'daily_reminder_enabled';
   static const _reduceMotionEnabledKey = 'reduce_motion_enabled';
-  static const _colorblindPaletteEnabledKey = 'colorblind_palette_enabled';
 
   /// Whether the one-time "How to Play" dialog has already been shown.
   bool get hasSeenHowToPlay =>
@@ -263,11 +262,6 @@ class PreferencesService {
       (_box.get(_reduceMotionEnabledKey) as bool?) ?? false;
   Future<void> setReduceMotionEnabled(bool value) =>
       _box.put(_reduceMotionEnabledKey, value);
-
-  bool get colorblindPaletteEnabled =>
-      (_box.get(_colorblindPaletteEnabledKey) as bool?) ?? false;
-  Future<void> setColorblindPaletteEnabled(bool value) =>
-      _box.put(_colorblindPaletteEnabledKey, value);
 
   /// Wipes every durable value this app keeps locally - all-time and
   /// period-bucketed best scores, daily-played gate, daily play history,

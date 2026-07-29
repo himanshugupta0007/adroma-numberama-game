@@ -15,29 +15,24 @@ class SettingsState {
     this.hapticsEnabled = true,
     this.dailyReminderEnabled = false,
     this.reduceMotionEnabled = false,
-    this.colorblindPaletteEnabled = false,
   });
 
   final bool soundEnabled;
   final bool hapticsEnabled;
   final bool dailyReminderEnabled;
   final bool reduceMotionEnabled;
-  final bool colorblindPaletteEnabled;
 
   SettingsState copyWith({
     bool? soundEnabled,
     bool? hapticsEnabled,
     bool? dailyReminderEnabled,
     bool? reduceMotionEnabled,
-    bool? colorblindPaletteEnabled,
   }) {
     return SettingsState(
       soundEnabled: soundEnabled ?? this.soundEnabled,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       dailyReminderEnabled: dailyReminderEnabled ?? this.dailyReminderEnabled,
       reduceMotionEnabled: reduceMotionEnabled ?? this.reduceMotionEnabled,
-      colorblindPaletteEnabled:
-          colorblindPaletteEnabled ?? this.colorblindPaletteEnabled,
     );
   }
 }
@@ -61,7 +56,6 @@ class SettingsStateNotifier extends StateNotifier<SettingsState> {
             hapticsEnabled: _prefs.hapticsEnabled,
             dailyReminderEnabled: _prefs.dailyReminderEnabled,
             reduceMotionEnabled: _prefs.reduceMotionEnabled,
-            colorblindPaletteEnabled: _prefs.colorblindPaletteEnabled,
           ),
         );
 
@@ -85,11 +79,6 @@ class SettingsStateNotifier extends StateNotifier<SettingsState> {
   void setReduceMotionEnabled(bool value) {
     state = state.copyWith(reduceMotionEnabled: value);
     _prefs.setReduceMotionEnabled(value);
-  }
-
-  void setColorblindPaletteEnabled(bool value) {
-    state = state.copyWith(colorblindPaletteEnabled: value);
-    _prefs.setColorblindPaletteEnabled(value);
   }
 
   /// Snaps every toggle back to first-launch defaults - [_prefs] has

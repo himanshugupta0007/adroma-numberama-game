@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -21,14 +22,10 @@ import 'home/bottom_nav_bar.dart';
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
-  // TODO: replace with real support email
-  static const _supportEmail = 'support@adroma.games';
+  static const _supportEmail = 'himanshugupta0007@gmail.com';
 
-  // TODO: replace with real privacy policy URL once published
-  static const _privacyPolicyUrl = 'https://adroma.games/numberama/privacy';
-
-  // TODO: wire up package_info_plus for a real version string
-  static const _appVersion = 'v0.1.0';
+  static const _privacyPolicyUrl =
+      'https://himanshugupta0007.github.io/adroma-game-policies/';
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -36,6 +33,21 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isSharingApp = false;
+
+  /// Null until [PackageInfo.fromPlatform] resolves - the footer just shows
+  /// nothing for that one frame rather than a hardcoded placeholder version.
+  String? _appVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _appVersion = 'v${info.version}');
+  }
 
   Future<void> _shareApp() async {
     if (_isSharingApp) return;
@@ -210,22 +222,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      const SettingsSectionHeader('Accessibility'),
-                      SettingsSectionCard(
-                        rows: [
-                          SettingsRow(
-                            label: 'Colorblind-Friendly Palette',
-                            subtitle: 'Adds shape cues to color-based feedback',
-                            // TODO(a11y): swap AppColors reads for
-                            // colorblind-safe variants when this is true.
-                            trailing: _switch(
-                              settings.colorblindPaletteEnabled,
-                              settingsNotifier.setColorblindPaletteEnabled,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
                       const SettingsSectionHeader('Purchases & Ads'),
                       SettingsSectionCard(
                         rows: [
@@ -303,13 +299,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             trailing: _chevron(),
                             onTap: () => _sendFeedback(context),
                           ),
-                          SettingsRow(
-                            label: 'More Games',
-                            trailing: _chevron(),
-                            // TODO(cross-promo): no games-list screen exists
-                            // yet in ui/ - navigate to it here once built.
-                            onTap: () => _showComingSoon(context, 'More Games'),
-                          ),
+                          // TODO(cross-promo): "More Games" row hidden until
+                          // there's a games-list screen (and other games) to
+                          // point it at - see doc/remaining-work.md.
                           SettingsRow(
                             label: 'Privacy Policy',
                             trailing: _chevron(),
@@ -320,7 +312,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 28),
                       Center(
                         child: Text(
-                          'Adhroma Games · ${SettingsScreen._appVersion}',
+                          _appVersion == null
+                              ? 'Adhroma Games'
+                              : 'Adhroma Games · $_appVersion',
                           style: AppTextStyles.mono(
                             10.5,
                             weight: FontWeight.w500,
