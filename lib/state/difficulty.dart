@@ -86,11 +86,20 @@ enum Difficulty {
 const Duration dailyRushDuration = Duration(seconds: 60);
 
 /// A per-day identifier shown alongside the daily board (e.g. "SEED #0714"
-/// for July 14th). Not a literal RNG seed - there's no seeded board
-/// generator yet, so today's board is still randomly generated like any
-/// Classic round - but a stable, honest per-date label instead of a
-/// hardcoded placeholder, and something for the results share card to
-/// reference.
+/// for July 14th) - and something for the results share card to reference.
+/// A display label only: month+day repeats across years, so it's not
+/// unique the way [dailySeed] needs to be.
 String dailySeedLabel(DateTime date) =>
     'SEED #${date.month.toString().padLeft(2, '0')}'
     '${date.day.toString().padLeft(2, '0')}';
+
+/// Deterministic integer seed for [date]'s local calendar day - the same
+/// value for every player regardless of time zone, and different from
+/// every other day (unlike [dailySeedLabel], which repeats across years).
+/// Feeds [NumberamaGame]'s injectable `Random` so the Daily Challenge board
+/// - tile values and pair placement, not just [Difficulty] tier - is the
+/// same for every player, the same way a real shared daily puzzle should be.
+int dailySeed(DateTime date) {
+  final day = DateTime.utc(date.year, date.month, date.day);
+  return day.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
+}

@@ -27,7 +27,8 @@ class NumberamaGame extends FlameGame {
     Random? random,
     double? autoRowIntervalSeconds,
     Duration? rushDuration,
-  })  : _random = random,
+  })  : _random = random ??
+            (isDaily ? Random(dailySeed(DateTime.now())) : null),
         autoRowIntervalSeconds =
             autoRowIntervalSeconds ?? difficulty.autoRowIntervalSeconds,
         initialRows = difficulty.initialRows,
@@ -51,7 +52,9 @@ class NumberamaGame extends FlameGame {
   /// [onLoad] over to the Rush setup path entirely - see there.
   final bool isDaily;
 
-  /// Injectable so tests can seed deterministic tile values.
+  /// Injectable so tests can seed deterministic tile values. Left `null` in
+  /// the app itself except for the Daily Challenge, which seeds it from
+  /// [dailySeed] so every player gets the same board - see the constructor.
   final Random? _random;
 
   static const int columns = GridComponent.columns;

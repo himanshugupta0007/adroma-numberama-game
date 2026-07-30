@@ -16,9 +16,8 @@ import '../home/bottom_nav_bar.dart';
 /// (driven by [PreferencesService.hasEverPlayedDailyOn]), today's
 /// [Difficulty] tier, and the one-attempt-per-day gate are all real.
 /// Today's board itself is a real, timed Rush round (see [GameplayScreen])
-/// tuned to today's tier - the seed label is a stable per-date identifier,
-/// not yet a literal RNG seed, so the exact tile layout still varies
-/// between plays of the "same" seed.
+/// tuned to today's tier and seeded from [dailySeed], so every player sees
+/// the exact same tile layout, not just the same tier.
 class DailyScreen extends ConsumerWidget {
   const DailyScreen({super.key});
 
