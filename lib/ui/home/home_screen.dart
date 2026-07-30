@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../state/game_mode.dart';
 import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
 import '../../widgets/wordmark_icon.dart';
-import '../gameplay/gameplay_screen.dart';
 import 'bottom_nav_bar.dart';
+import 'classic_difficulty_screen.dart';
 import 'mode_card.dart';
 
 /// Landing screen: a centered hero wordmark, a best-score summary (today's/
@@ -35,10 +34,10 @@ class HomeScreen extends ConsumerWidget {
     'December',
   ];
 
-  void _openGameplay(BuildContext context, GameMode mode) {
+  void _openClassicDifficultyPicker(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => GameplayScreen(mode: mode)),
+      MaterialPageRoute(builder: (_) => const ClassicDifficultyScreen()),
     );
   }
 
@@ -115,7 +114,7 @@ class HomeScreen extends ConsumerWidget {
                             action: GradientButton(
                               label: 'Play Classic',
                               onPressed: () =>
-                                  _openGameplay(context, GameMode.classic),
+                                  _openClassicDifficultyPicker(context),
                             ),
                           ),
                         ],

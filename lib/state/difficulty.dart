@@ -1,13 +1,11 @@
-/// A Daily Challenge difficulty tier. Classic always plays at [medium]
-/// (today's existing baseline behavior, via [NumberamaGame]'s default) -
-/// only the Daily Challenge varies tier, and which tier applies on a given
-/// date is fixed (see [Difficulty.forDate]) so every player sees the same
-/// difficulty on the same day, the same way everyone gets the same puzzle.
+/// A difficulty tier, chosen by the player before a Classic round (see the
+/// home screen's difficulty picker) or fixed by the calendar date for the
+/// Daily Challenge (see [Difficulty.forDate]), so every player sees the same
+/// Daily tier on the same day, the same way everyone gets the same puzzle.
 ///
 /// The Daily Challenge is a Rush round (see [rushPairDistanceRange]/
 /// [rushSumPairChance]/[dailyRushDuration]), not Classic's rising stack -
-/// [autoRowIntervalSeconds]/[initialRows] exist only for Classic's own
-/// fixed [medium] baseline and are never varied by tier in practice.
+/// [autoRowIntervalSeconds]/[initialRows] only take effect in Classic.
 enum Difficulty {
   easy,
   medium,
@@ -23,9 +21,9 @@ enum Difficulty {
   /// mode - the one clock that mode has, so it's the most direct lever on
   /// pressure. Unused by the Daily Challenge (see class doc).
   double get autoRowIntervalSeconds => switch (this) {
-        Difficulty.easy => 8,
-        Difficulty.medium => 5,
-        Difficulty.hard => 3,
+        Difficulty.easy => 10,
+        Difficulty.medium => 7,
+        Difficulty.hard => 5,
       };
 
   /// Rows filled before a Classic round even starts - less starting
@@ -42,16 +40,22 @@ enum Difficulty {
   /// than merely harder to earn. Applies to both Classic and Daily.
   bool get powerUpsEnabled => this != Difficulty.hard;
 
-  /// Tile face values are drawn from 1..[maxTileValue]. [easy] narrows the
-  /// pool so pairs are easier to spot at a glance; [medium]/[hard] use the
-  /// full 1-9 spread, where a matching pair is rarer to stumble across.
-  /// Applies to both Classic and Daily.
-  int get maxTileValue => this == Difficulty.easy ? 5 : 9;
+  /// Tile face values are drawn from 1..[maxTileValue] - a narrower pool
+  /// means more repeated values on the board, so a matching pair is easier
+  /// to spot at a glance; a wider pool spreads values thinner, so pairs are
+  /// rarer to stumble across. Widens from [easy] to [hard] so pair-finding
+  /// itself gets progressively harder, not just the board's pace. Applies
+  /// to both Classic and Daily.
+  int get maxTileValue => switch (this) {
+        Difficulty.easy => 5,
+        Difficulty.medium => 7,
+        Difficulty.hard => 9,
+      };
 
   /// Daily Rush only: how far apart (Chebyshev distance in cells) a
   /// planted pair's two tiles are placed. Narrow on [easy] (the pair sits
   /// right next to each other, or diagonally touching); wide on [hard]
-  /// (opposite ends of the board) - the max possible distance on a 9x9
+  /// (opposite ends of the board) - the max possible distance on the 9x8
   /// board is 8, corner to corner.
   ({int min, int max}) get rushPairDistanceRange => switch (this) {
         Difficulty.easy => (min: 1, max: 2),

@@ -34,8 +34,9 @@ class GameplayScreen extends ConsumerStatefulWidget {
 
   final GameMode mode;
 
-  /// Only varies for the Daily Challenge - Classic/Rush from the home
-  /// screen always play at [Difficulty.medium].
+  /// The tier this round plays at - chosen by the player on Classic's
+  /// difficulty picker, or fixed by the calendar date for the Daily
+  /// Challenge (see [Difficulty.forDate]).
   final Difficulty difficulty;
 
   /// Whether this round is today's Daily Challenge board rather than an
@@ -244,7 +245,7 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
                   _TopBar(
                     pillLabel: widget.isDaily
                         ? 'Daily · ${widget.difficulty.label}'
-                        : widget.mode.pillLabel,
+                        : '${widget.mode.pillLabel} · ${widget.difficulty.label}',
                     onBack: _confirmExit,
                     onHelp: _showHowToPlay,
                     onPause: _pause,

@@ -11,6 +11,7 @@ import '../../widgets/graph_paper_background.dart';
 import '../../widgets/streak_summary_card.dart';
 import '../gameplay/gameplay_screen.dart';
 import '../home/bottom_nav_bar.dart';
+import '../home/difficulty_style.dart';
 
 /// Daily challenge landing screen. The date, calendar-strip day markers
 /// (driven by [PreferencesService.hasEverPlayedDailyOn]), today's
@@ -222,27 +223,9 @@ class _BoardCard extends StatelessWidget {
   final Difficulty difficulty;
   final DateTime date;
 
-  /// Same accent-per-tier convention as the rest of the app: teal reads as
-  /// the calm/easy end, amber as the neutral default, coral as the
-  /// urgent/hard end (it was Rush's color when Rush still existed).
-  static Color _chipColor(Difficulty difficulty) => switch (difficulty) {
-        Difficulty.easy => AppColors.teal,
-        Difficulty.medium => AppColors.amber,
-        Difficulty.hard => AppColors.coral,
-      };
-
-  /// A tier-themed glyph for the icon badge - calm for easy, balanced for
-  /// medium, intense for hard - same accent-per-tier convention as
-  /// [_chipColor], just as an icon instead of a color.
-  static IconData _tierIcon(Difficulty difficulty) => switch (difficulty) {
-        Difficulty.easy => Icons.spa_rounded,
-        Difficulty.medium => Icons.balance_rounded,
-        Difficulty.hard => Icons.local_fire_department_rounded,
-      };
-
   @override
   Widget build(BuildContext context) {
-    final chipColor = _chipColor(difficulty);
+    final chipColor = difficulty.accentColor;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -295,7 +278,7 @@ class _BoardCard extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
-                child: Icon(_tierIcon(difficulty), color: chipColor, size: 26),
+                child: Icon(difficulty.tierIcon, color: chipColor, size: 26),
               ),
               const SizedBox(width: 16),
               Expanded(

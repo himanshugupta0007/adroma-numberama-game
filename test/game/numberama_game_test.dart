@@ -201,7 +201,7 @@ void main() {
   );
 
   testWithGame<NumberamaGame>(
-    'the board is a fixed 9x9 square that fits the canvas without overflowing',
+    'the board is a fixed 9x8 rectangle that fits the canvas without overflowing',
     () => NumberamaGame(
         gameStateNotifier: GameStateNotifier(),
         random: Random(1),
@@ -209,17 +209,11 @@ void main() {
     (game) async {
       await game.ready();
 
-      // Square on purpose: columns == maxRows means cell size is bound by
-      // min(width, height) equally on both axes, so the board shrinks or
-      // grows uniformly on any screen instead of needing extra vertical
-      // room that could force the page to scroll.
-      expect(GridComponent.columns, GridComponent.maxRows);
-
       // A tile's rendered size reveals the cell size actually chosen, so
       // we can confirm the full rectangle it implies still fits inside the
       // canvas rather than clipping off an edge.
       final tileSize = game.gridComponent.activeTiles.first.size.y;
-      const paddingFactor = 0.1;
+      const paddingFactor = 0.06;
       final cellSize = tileSize / (1 - paddingFactor);
       final boardWidth = GridComponent.columns * cellSize;
       final boardHeight = GridComponent.maxRows * cellSize;
@@ -313,7 +307,7 @@ void main() {
 
   group('Daily Challenge Rush', () {
     testWithGame<NumberamaGame>(
-      'fills the entire board minus one blank cell at load',
+      'fills the entire board at load, since its cell count is even',
       () => NumberamaGame(
           gameStateNotifier: GameStateNotifier(),
           isDaily: true,
@@ -324,7 +318,7 @@ void main() {
 
         expect(
           game.gridComponent.tileCount,
-          GridComponent.columns * GridComponent.maxRows - 1,
+          GridComponent.columns * GridComponent.maxRows,
         );
         // Rush is a fixed board, not a rising stack - it starts full.
         expect(game.gridComponent.canAddRow, isFalse);

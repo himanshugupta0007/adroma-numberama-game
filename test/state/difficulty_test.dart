@@ -46,9 +46,9 @@ void main() {
       expect(Difficulty.hard.powerUpsEnabled, isFalse);
     });
 
-    test('only easy narrows the tile value range', () {
+    test('tile value range widens from easy to hard', () {
       expect(Difficulty.easy.maxTileValue, lessThan(Difficulty.medium.maxTileValue));
-      expect(Difficulty.medium.maxTileValue, Difficulty.hard.maxTileValue);
+      expect(Difficulty.medium.maxTileValue, lessThan(Difficulty.hard.maxTileValue));
     });
   });
 }

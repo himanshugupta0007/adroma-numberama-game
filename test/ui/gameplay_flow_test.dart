@@ -80,6 +80,12 @@ Future<(NumberamaGame, ProviderContainer)> _openGameplay(
   await tester.ensureVisible(playClassicButton);
   await tester.pump();
   await tester.tap(playClassicButton);
+  await tester.pumpAndSettle();
+
+  // Play Classic now opens a difficulty picker first - Medium keeps this
+  // helper's baseline (3 initial rows * 9 columns = 27 tiles) matching what
+  // every test below still assumes.
+  await tester.tap(find.text('Medium'));
   // Bounded pumps for the route transition and for Flame to finish its
   // onLoad chain (grid built, initial rows added) - not pumpAndSettle, the
   // new screen's GameWidget starts ticking continuously immediately.

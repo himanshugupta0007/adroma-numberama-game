@@ -42,9 +42,9 @@ class NumberamaGame extends FlameGame {
 
   /// Governs tile value range and whether power-ups are offered this round
   /// (both apply to Classic and Daily), plus - for Classic only - starting
-  /// rows and auto-row speed. See [Difficulty]. Classic always plays at
-  /// [Difficulty.medium] (today's existing baseline); only the Daily
-  /// Challenge varies tier.
+  /// rows and auto-row speed. See [Difficulty]. Classic players pick their
+  /// own tier on the home screen's difficulty picker; the Daily Challenge's
+  /// tier is fixed by the calendar date instead (see [Difficulty.forDate]).
   final Difficulty difficulty;
 
   /// Whether this is the Daily Challenge's Rush mode: a fixed, fully-filled

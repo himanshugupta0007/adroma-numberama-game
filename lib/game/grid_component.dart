@@ -32,18 +32,18 @@ class GridComponent extends PositionComponent with HasGameReference {
   /// glance. Defaults to the full 1-9 spread.
   final int maxTileValue;
 
-  /// Fixed 9x9 board - square on purpose, so [_recalculateMetrics] can size
-  /// it off `min(width, height)` and it shrinks/grows uniformly on any
-  /// screen without ever needing to scroll or overflow its allotted space.
+  /// Fixed 9x8 board, so [_recalculateMetrics] can size it off
+  /// `min(width, height)` and it shrinks/grows uniformly on any screen
+  /// without ever needing to scroll or overflow its allotted space.
   static const int columns = 9;
 
   /// Board-full ceiling: once the grid has this many rows, [addRow] can no
   /// longer be called - see [canAddRow].
-  static const int maxRows = 9;
+  static const int maxRows = 8;
 
   /// Tile padding as a fraction of a grid cell's width, per spec: tiles are
   /// 10% padded relative to (screen width / 9 columns).
-  static const double _paddingFactor = 0.1;
+  static const double _paddingFactor = 0.06;
 
   /// Injectable so tests can seed deterministic tile values.
   final Random _random;
@@ -74,10 +74,9 @@ class GridComponent extends PositionComponent with HasGameReference {
 
   /// Cell size is constrained by both axes against the *max* board size
   /// (not the current row count), so tiles never have to shrink again
-  /// later as rows are appended - the full 9x9 board always fits the
-  /// canvas without clipping, and shrinks uniformly (never scrolls) on a
-  /// shorter screen since both axes are divided by the same 9. The
-  /// rectangle itself is sized for [maxRows] and centered once here -
+  /// later as rows are appended - the full 9x8 board always fits the
+  /// canvas without clipping. The rectangle itself is sized for [maxRows]
+  /// and centered once here -
   /// unlike tile layout, it never moves as rows are added or cleared,
   /// since it represents the fixed play-field boundary, not the current
   /// stack height.
@@ -257,10 +256,11 @@ class GridComponent extends PositionComponent with HasGameReference {
   /// the Daily Challenge's Rush mode, where the whole board exists from
   /// the first frame and there's no rising stack to grow.
   ///
-  /// [emptyCells] defaults to 1 so the remaining tile count (board size
-  /// minus [emptyCells]) is always even - [columns] * [maxRows] alone is
-  /// odd (81), which would leave one tile mathematically unmatchable and
-  /// the board impossible to ever fully clear.
+  /// [emptyCells] defaults to whatever keeps the remaining tile count
+  /// (board size minus [emptyCells]) even - 1 if [columns] * [maxRows] is
+  /// odd, 0 if it's already even - since an odd remaining count would leave
+  /// one tile mathematically unmatchable and the board impossible to ever
+  /// fully clear.
   ///
   /// Values are placed in matched pairs (equal-value, or summing to 10)
   /// whose two cells are [pairDistanceRange] apart (Chebyshev distance -
@@ -272,8 +272,9 @@ class GridComponent extends PositionComponent with HasGameReference {
   void fillRushBoard({
     required ({int min, int max}) pairDistanceRange,
     required double sumPairChance,
-    int emptyCells = 1,
+    int? emptyCells,
   }) {
+    emptyCells ??= (columns * maxRows).isOdd ? 1 : 0;
     final cells = [
       for (var row = 0; row < maxRows; row++)
         for (var col = 0; col < columns; col++) (row, col),
