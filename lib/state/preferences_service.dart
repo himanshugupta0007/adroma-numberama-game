@@ -84,6 +84,9 @@ class PreferencesService {
   static const _hapticsEnabledKey = 'haptics_enabled';
   static const _dailyReminderEnabledKey = 'daily_reminder_enabled';
   static const _reduceMotionEnabledKey = 'reduce_motion_enabled';
+  static const _appOpenCountKey = 'app_open_count';
+  static const _hasRatedKey = 'has_rated';
+  static const _lastRatePromptDateKey = 'last_rate_prompt_date';
 
   /// Whether the one-time "How to Play" dialog has already been shown.
   bool get hasSeenHowToPlay =>
@@ -263,9 +266,61 @@ class PreferencesService {
   Future<void> setReduceMotionEnabled(bool value) =>
       _box.put(_reduceMotionEnabledKey, value);
 
+  /// Number of times the app has been cold-started, `0` before the very
+  /// first launch has finished registering. Only ever incremented, once
+  /// per launch, by [registerAppOpened] - drives the "Rate Numberama"
+  /// prompt's first-trigger threshold in [shouldShowRatePrompt].
+  int get appOpenCount => (_box.get(_appOpenCountKey) as int?) ?? 0;
+
+  /// Bumps [appOpenCount] and returns the new count - called once from
+  /// `main()` on every cold launch.
+  int registerAppOpened() {
+    final next = appOpenCount + 1;
+    _box.put(_appOpenCountKey, next);
+    return next;
+  }
+
+  /// Whether the player has already engaged with the native rating flow
+  /// (automatic prompt or the manual Settings row) - once `true`,
+  /// [shouldShowRatePrompt] never fires again.
+  bool get hasRated => (_box.get(_hasRatedKey) as bool?) ?? false;
+
+  Future<void> setHasRated() => _box.put(_hasRatedKey, true);
+
+  /// Calendar day the "Rate Numberama" prompt was last shown, `null` if
+  /// never - drives [shouldShowRatePrompt]'s 4-day cooldown between repeat
+  /// prompts.
+  DateTime? get lastRatePromptDate {
+    final key = _box.get(_lastRatePromptDateKey) as String?;
+    if (key == null) return null;
+    final parts = key.split('-').map(int.parse).toList();
+    return DateTime(parts[0], parts[1], parts[2]);
+  }
+
+  Future<void> setLastRatePromptDate(DateTime date) =>
+      _box.put(_lastRatePromptDateKey, _dateKey(date));
+
+  /// Whether the automatic "Rate Numberama" prompt should show right now:
+  /// first on the app's 4th open ([lastRatePromptDate] still `null` at that
+  /// point), then again every 4 calendar days after that - so it nags on a
+  /// slow, day-based cadence rather than on every single launch - and never
+  /// once [hasRated] is `true`.
+  bool shouldShowRatePrompt({DateTime? now}) {
+    if (hasRated) return false;
+    if (appOpenCount < 4) return false;
+    final last = lastRatePromptDate;
+    if (last == null) return true;
+    final today = now ?? DateTime.now();
+    final elapsedDays = DateTime(today.year, today.month, today.day)
+        .difference(DateTime(last.year, last.month, last.day))
+        .inDays;
+    return elapsedDays >= 4;
+  }
+
   /// Wipes every durable value this app keeps locally - all-time and
   /// period-bucketed best scores, daily-played gate, daily play history,
-  /// streak, Classic round count, and every setting above - back to
-  /// first-launch defaults. Used by Settings' "Reset Progress" action.
+  /// streak, Classic round count, the "Rate Numberama" prompt's own
+  /// tracking, and every setting above - back to first-launch defaults.
+  /// Used by Settings' "Reset Progress" action.
   Future<void> clearAll() => _box.clear();
 }

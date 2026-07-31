@@ -24,7 +24,7 @@ class TileComponent extends PositionComponent with TapCallbacks {
     required super.size,
   }) : super(anchor: Anchor.topLeft);
 
-  /// The face value of this tile, 1-9. Mutable only for the shuffle
+  /// The face value of this tile, 1-10. Mutable only for the shuffle
   /// power-up (see [setValue]) - every other rule in the game treats a
   /// tile's value as fixed for its lifetime.
   int value;

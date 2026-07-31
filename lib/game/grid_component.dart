@@ -22,14 +22,13 @@ class GridComponent extends PositionComponent with HasGameReference {
   GridComponent({
     required this.selectionManager,
     Random? random,
-    this.maxTileValue = 9,
+    this.maxTileValue = 10,
   }) : _random = random ?? Random();
 
   final SelectionManager selectionManager;
 
-  /// Tile face values are drawn from 1..[maxTileValue] - a Daily Challenge
-  /// on an easier tier narrows this so pairs are easier to spot at a
-  /// glance. Defaults to the full 1-9 spread.
+  /// Tile face values are drawn from 1..[maxTileValue]. Defaults to the
+  /// full 1-10 spread, the same value every difficulty tier uses.
   final int maxTileValue;
 
   /// Fixed 9x8 board, so [_recalculateMetrics] can size it off
@@ -175,7 +174,7 @@ class GridComponent extends PositionComponent with HasGameReference {
             if (tile != null) tile,
       ];
 
-  /// Appends a new row of random 1-9 tiles at the bottom of the rectangle,
+  /// Appends a new row of random 1-10 tiles at the bottom of the rectangle,
   /// pushing every existing row up by one cell height. [animate] should be
   /// `false` for the silent initial fill (several calls back-to-back with
   /// no frame tick in between, so there's nothing to smoothly animate from
@@ -212,9 +211,9 @@ class GridComponent extends PositionComponent with HasGameReference {
   /// left (already in [row]) and every already-placed neighbor directly
   /// above it (in [rowAbove], the previous row - `null` for the very first
   /// row): straight above plus both above-diagonals. Falls back to just
-  /// excluding left/above (guaranteed to leave a non-empty pool even at
-  /// the narrowest range, [maxTileValue] 5) on the rare board where all
-  /// four neighbors already cover every value in range.
+  /// excluding left/above (guaranteed to leave a non-empty pool, since at
+  /// most 2 of [maxTileValue] 10 values get excluded that way) on the rare
+  /// board where all four neighbors already cover every value in range.
   int _nextTileValue({
     required int col,
     required List<TileComponent?> row,
@@ -300,10 +299,10 @@ class GridComponent extends PositionComponent with HasGameReference {
 
       final value = 1 + _random.nextInt(maxTileValue);
       final complement = 10 - value;
-      // A sum-to-10 pair needs its complement to also be a legal value for
-      // this difficulty's range (e.g. easy's 1-5 range can't pair a 1 with
-      // a 9) - fall back to an equal-value pair when it isn't, still a
-      // perfectly valid pair either way.
+      // A sum-to-10 pair needs its complement to also be a legal value in
+      // range (a 10 has no legal complement - 10 + 0 isn't a real tile) -
+      // fall back to an equal-value pair when it isn't, still a perfectly
+      // valid pair either way.
       final canSumPair = complement >= 1 && complement <= maxTileValue;
       final wantsSumPair = _random.nextDouble() < sumPairChance;
       final partnerValue = (wantsSumPair && canSumPair) ? complement : value;

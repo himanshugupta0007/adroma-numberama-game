@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/rate_service.dart';
 import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/dialog_card.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
 import '../../widgets/wordmark_icon.dart';
@@ -16,7 +18,13 @@ import 'mode_card.dart';
 /// card. Daily Challenge and Settings are reached from the bottom nav, not
 /// from this screen's main content - the streak lives on the Daily
 /// Challenge screen itself, since Classic play doesn't affect it.
-class HomeScreen extends ConsumerWidget {
+///
+/// Also owns the automatic "Rate Numberama" prompt: [HomeScreen] is created
+/// exactly once per cold launch (every path back to it - "Back to Home",
+/// "Done for today" - pops or `popUntil`s the existing instance rather than
+/// pushing a new one), so [initState] firing once is the same event as "the
+/// app was opened" - see [PreferencesService.shouldShowRatePrompt].
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   static const _monthNames = [
@@ -34,6 +42,41 @@ class HomeScreen extends ConsumerWidget {
     'December',
   ];
 
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowRatePrompt());
+  }
+
+  /// Shows the "Rate Numberama" prompt if [PreferencesService.
+  /// shouldShowRatePrompt] says it's due - see that method for the actual
+  /// 4th-open / every-4-days cadence. Records today as the last-shown day
+  /// up front (not after the dialog resolves) so a quick re-launch before
+  /// the dialog is dismissed can't re-trigger it.
+  Future<void> _maybeShowRatePrompt() async {
+    if (!mounted) return;
+    final prefs = ref.read(preferencesServiceProvider);
+    if (!prefs.shouldShowRatePrompt()) return;
+    await prefs.setLastRatePromptDate(DateTime.now());
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => _RatePromptDialog(
+        onRate: () async {
+          Navigator.pop(dialogContext);
+          await RateService.instance.requestReview();
+          await prefs.setHasRated();
+        },
+        onNotNow: () => Navigator.pop(dialogContext),
+      ),
+    );
+  }
+
   void _openClassicDifficultyPicker(BuildContext context) {
     Navigator.push(
       context,
@@ -42,7 +85,7 @@ class HomeScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     // The score cards below can change from outside this screen entirely
     // (a round played on the gameplay screen, or Settings' "Reset
     // Progress") - watching the revision ticker is what makes this screen
@@ -89,7 +132,7 @@ class HomeScreen extends ConsumerWidget {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: _PeriodScoreChip(
-                                  label: _monthNames[now.month - 1],
+                                  label: HomeScreen._monthNames[now.month - 1],
                                   score: prefs.monthBestScore,
                                 ),
                               ),
@@ -192,6 +235,53 @@ class _BestEverCard extends StatelessWidget {
           ),
           Text('$score',
               style: AppTextStyles.mono(22, color: AppColors.textHi)),
+        ],
+      ),
+    );
+  }
+}
+
+/// The automatic "Rate Numberama" prompt - see [_HomeScreenState.
+/// _maybeShowRatePrompt] for when this shows. "Not Now" just dismisses (it
+/// shows again per the usual cooldown); "Rate Now" is the one path that
+/// permanently retires it, via [PreferencesService.setHasRated].
+class _RatePromptDialog extends StatelessWidget {
+  const _RatePromptDialog({required this.onRate, required this.onNotNow});
+
+  final VoidCallback onRate;
+  final VoidCallback onNotNow;
+
+  @override
+  Widget build(BuildContext context) {
+    return DialogCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Icon(Icons.star_rounded, color: AppColors.amber, size: 44),
+          const SizedBox(height: 12),
+          Text(
+            'Enjoying Numberama?',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.display(18, weight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "A quick rating helps a lot and takes only a few seconds.",
+            textAlign: TextAlign.center,
+            style: AppTextStyles.display(13,
+                weight: FontWeight.w400, color: AppColors.textMid),
+          ),
+          const SizedBox(height: 24),
+          GradientButton(label: 'Rate Now', onPressed: onRate),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: onNotNow,
+              child: const Text('Not Now'),
+            ),
+          ),
         ],
       ),
     );

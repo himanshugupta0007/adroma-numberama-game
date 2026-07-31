@@ -142,7 +142,7 @@ class _DifficultyOptionCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Icon(Icons.chevron_right_rounded, color: AppColors.textLow),
+                  const Icon(Icons.chevron_right_rounded, color: AppColors.textLow),
                 ],
               ),
               const SizedBox(height: 14),

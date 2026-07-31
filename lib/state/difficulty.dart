@@ -40,17 +40,11 @@ enum Difficulty {
   /// than merely harder to earn. Applies to both Classic and Daily.
   bool get powerUpsEnabled => this != Difficulty.hard;
 
-  /// Tile face values are drawn from 1..[maxTileValue] - a narrower pool
-  /// means more repeated values on the board, so a matching pair is easier
-  /// to spot at a glance; a wider pool spreads values thinner, so pairs are
-  /// rarer to stumble across. Widens from [easy] to [hard] so pair-finding
-  /// itself gets progressively harder, not just the board's pace. Applies
-  /// to both Classic and Daily.
-  int get maxTileValue => switch (this) {
-        Difficulty.easy => 5,
-        Difficulty.medium => 7,
-        Difficulty.hard => 9,
-      };
+  /// Tile face values are drawn from 1..[maxTileValue] - fixed at 10 for
+  /// every tier (Classic and Daily alike), so pace (see
+  /// [autoRowIntervalSeconds]) is what separates the tiers, not the tile
+  /// pool itself.
+  int get maxTileValue => 10;
 
   /// Daily Rush only: how far apart (Chebyshev distance in cells) a
   /// planted pair's two tiles are placed. Narrow on [easy] (the pair sits

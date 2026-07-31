@@ -261,7 +261,7 @@ void main() {
   );
 
   testWithGame<NumberamaGame>(
-    'easy difficulty only ever generates tile values 1-5',
+    'every difficulty generates tile values from the same 1-10 range',
     () => NumberamaGame(
         gameStateNotifier: GameStateNotifier(),
         difficulty: Difficulty.easy,
@@ -272,7 +272,7 @@ void main() {
 
       expect(game.initialRows, Difficulty.easy.initialRows);
       for (final tile in game.gridComponent.activeTiles) {
-        expect(tile.value, inInclusiveRange(1, 5));
+        expect(tile.value, inInclusiveRange(1, 10));
       }
     },
   );

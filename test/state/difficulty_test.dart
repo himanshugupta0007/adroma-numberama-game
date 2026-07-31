@@ -46,9 +46,10 @@ void main() {
       expect(Difficulty.hard.powerUpsEnabled, isFalse);
     });
 
-    test('tile value range widens from easy to hard', () {
-      expect(Difficulty.easy.maxTileValue, lessThan(Difficulty.medium.maxTileValue));
-      expect(Difficulty.medium.maxTileValue, lessThan(Difficulty.hard.maxTileValue));
+    test('tile value range is the same 1-10 spread on every tier', () {
+      expect(Difficulty.easy.maxTileValue, 10);
+      expect(Difficulty.medium.maxTileValue, 10);
+      expect(Difficulty.hard.maxTileValue, 10);
     });
   });
 }

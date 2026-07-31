@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/notification_service.dart';
+import '../services/rate_service.dart';
 import '../state/preferences_service.dart';
 import '../state/settings_state.dart';
 import '../theme/app_colors.dart';
@@ -113,6 +114,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   void _showComingSoon(BuildContext context, String label) {
     showMessageDialog(context, '$label — coming soon');
+  }
+
+  /// Manual counterpart to the home screen's automatic prompt (see
+  /// [PreferencesService.shouldShowRatePrompt]) - requests the same native
+  /// review flow on demand, and marks it rated so the automatic prompt
+  /// doesn't also nag afterwards.
+  Future<void> _rateApp(WidgetRef ref) async {
+    await RateService.instance.requestReview();
+    await ref.read(preferencesServiceProvider).setHasRated();
   }
 
   Future<void> _sendFeedback(BuildContext context) async {
@@ -290,9 +300,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           SettingsRow(
                             label: 'Rate Numberama',
                             trailing: _chevron(),
-                            // TODO(store): launch store listing URL.
-                            onTap: () =>
-                                _showComingSoon(context, 'Rate Numberama'),
+                            onTap: () => _rateApp(ref),
                           ),
                           SettingsRow(
                             label: 'Send Feedback',

@@ -12,6 +12,7 @@ Future<void> main() async {
   await Hive.initFlutter();
   final box = await Hive.openBox(PreferencesService.boxName);
   final prefs = PreferencesService(box);
+  prefs.registerAppOpened();
 
   await NotificationService.instance.initialize();
   // Scheduled notifications aren't guaranteed to survive app
