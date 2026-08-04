@@ -26,13 +26,28 @@ enum Difficulty {
         Difficulty.hard => 5,
       };
 
+  /// Board height (rows) in Classic - [GridComponent.maxRows]. Fixed at 8
+  /// for [easy]/[medium]; [hard] gets a taller 9-row board (still 9
+  /// columns, so a 9x9 grid), which also shrinks every tile a little since
+  /// cell size is screen height / [maxRows] (see
+  /// [GridComponent._recalculateMetrics]). Unused by the Daily Challenge,
+  /// which always fills the fixed 9x8 board via [GridComponent.fillRushBoard]
+  /// regardless of tier.
+  int get maxRows => switch (this) {
+        Difficulty.easy => 8,
+        Difficulty.medium => 8,
+        Difficulty.hard => 9,
+      };
+
   /// Rows filled before a Classic round even starts - less starting
-  /// headroom means less room to recover from an early mistake. Unused by
-  /// the Daily Challenge (see class doc).
+  /// headroom means less room to recover from an early mistake. [hard]
+  /// starts roughly half of its (taller, see [maxRows]) board already
+  /// stacked, on top of that reduced headroom. Unused by the Daily
+  /// Challenge (see class doc).
   int get initialRows => switch (this) {
         Difficulty.easy => 2,
         Difficulty.medium => 3,
-        Difficulty.hard => 5,
+        Difficulty.hard => (maxRows / 2).ceil(),
       };
 
   /// Whether shuffle/hint are offered at all this round - removed

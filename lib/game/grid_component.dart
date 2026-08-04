@@ -23,6 +23,7 @@ class GridComponent extends PositionComponent with HasGameReference {
     required this.selectionManager,
     Random? random,
     this.maxTileValue = 10,
+    this.maxRows = 8,
   }) : _random = random ?? Random();
 
   final SelectionManager selectionManager;
@@ -31,14 +32,18 @@ class GridComponent extends PositionComponent with HasGameReference {
   /// full 1-10 spread, the same value every difficulty tier uses.
   final int maxTileValue;
 
-  /// Fixed 9x8 board, so [_recalculateMetrics] can size it off
+  /// Fixed 9-column board, so [_recalculateMetrics] can size it off
   /// `min(width, height)` and it shrinks/grows uniformly on any screen
   /// without ever needing to scroll or overflow its allotted space.
   static const int columns = 9;
 
   /// Board-full ceiling: once the grid has this many rows, [addRow] can no
-  /// longer be called - see [canAddRow].
-  static const int maxRows = 8;
+  /// longer be called - see [canAddRow]. Fixed at 8 for every difficulty
+  /// except [Difficulty.hard] (9 - see [Difficulty.maxRows]), which trades
+  /// the extra row for smaller tiles (cell size is [game.size.y] /
+  /// [maxRows], so a taller board means a smaller cell) and less starting
+  /// headroom.
+  final int maxRows;
 
   /// Tile padding as a fraction of a grid cell's width, per spec: tiles are
   /// 10% padded relative to (screen width / 9 columns).
@@ -73,7 +78,7 @@ class GridComponent extends PositionComponent with HasGameReference {
 
   /// Cell size is constrained by both axes against the *max* board size
   /// (not the current row count), so tiles never have to shrink again
-  /// later as rows are appended - the full 9x8 board always fits the
+  /// later as rows are appended - the full board always fits the
   /// canvas without clipping. The rectangle itself is sized for [maxRows]
   /// and centered once here -
   /// unlike tile layout, it never moves as rows are added or cleared,
@@ -157,8 +162,12 @@ class GridComponent extends PositionComponent with HasGameReference {
 
   bool get isEmpty => tileCount == 0;
 
-  /// Whether another row can be appended without exceeding [maxRows].
-  bool get canAddRow => _grid.length < maxRows;
+  /// Whether calling [addRow] can do anything. True either when the
+  /// bottom-most row still has spare columns to top up, or when a brand
+  /// new row can be appended without exceeding [maxRows] - see [addRow].
+  bool get canAddRow =>
+      (_grid.isNotEmpty && _grid.last.length < columns) ||
+      _grid.length < maxRows;
 
   int get tileCount => _grid.fold(
         0,
@@ -175,10 +184,20 @@ class GridComponent extends PositionComponent with HasGameReference {
       ];
 
   /// Appends a new row of random 1-10 tiles at the bottom of the rectangle,
-  /// pushing every existing row up by one cell height. [animate] should be
-  /// `false` for the silent initial fill (several calls back-to-back with
-  /// no frame tick in between, so there's nothing to smoothly animate from
-  /// anyway) and `true` for every in-round row added while the player watches.
+  /// pushing every existing row up by one cell height - unless the current
+  /// bottom row is a short one left behind by [_collapse] (fewer than
+  /// [columns] tiles, e.g. after a pair clears and the remaining tiles
+  /// reflow), in which case this tops that row up to [columns] tiles
+  /// instead of stacking an entirely new row underneath/above it. Without
+  /// that check, a 2-3 tile row would count identically toward [maxRows] as
+  /// a full one - wasting board capacity and both looking wrong (a mostly
+  /// empty row sitting right next to a freshly-added full one) and ending
+  /// the round sooner than the visible tile count would suggest.
+  ///
+  /// [animate] should be `false` for the silent initial fill (several calls
+  /// back-to-back with no frame tick in between, so there's nothing to
+  /// smoothly animate from anyway) and `true` for every in-round row added
+  /// while the player watches.
   ///
   /// Each value is rolled to differ from every already-placed neighbor
   /// touching its cell - left, directly above, and both above-diagonals
@@ -188,6 +207,11 @@ class GridComponent extends PositionComponent with HasGameReference {
   /// pair existing on the board at all: it's still just as easy to find by
   /// looking, just not for free.
   void addRow({bool animate = true}) {
+    if (_grid.isNotEmpty && _grid.last.length < columns) {
+      _topUpBottomRow(animate: animate);
+      return;
+    }
+
     final rowIndex = _grid.length;
     final newTotalRows = rowIndex + 1;
     final rowAbove = _grid.isNotEmpty ? _grid.last : null;
@@ -203,6 +227,28 @@ class GridComponent extends PositionComponent with HasGameReference {
       add(tile);
     }
     _grid.add(row);
+    _applyLayout(animate: animate);
+  }
+
+  /// Fills the missing columns of the current bottom row up to [columns]
+  /// tiles - see [addRow]'s doc for why this exists instead of always
+  /// appending a new row. Row count ([_grid.length]) doesn't change, so
+  /// unlike a genuinely new row this never shifts any other row's slot.
+  void _topUpBottomRow({required bool animate}) {
+    final rowIndex = _grid.length - 1;
+    final row = _grid[rowIndex];
+    final rowAbove = rowIndex > 0 ? _grid[rowIndex - 1] : null;
+    final totalRows = _grid.length;
+    for (var col = row.length; col < columns; col++) {
+      final tile = TileComponent(
+        value: _nextTileValue(col: col, row: row, rowAbove: rowAbove),
+        onTileTapped: selectionManager.onTileTapped,
+        position: _positionForCell(rowIndex, col, totalRows: totalRows),
+        size: Vector2.all(_tileSize),
+      );
+      row.add(tile);
+      add(tile);
+    }
     _applyLayout(animate: animate);
   }
 
@@ -362,6 +408,27 @@ class GridComponent extends PositionComponent with HasGameReference {
         return;
       }
     }
+  }
+
+  /// All non-null tiles currently in the bottom-most row - what the
+  /// clear-row power-up (see [SelectionManager.clearRow]) animates before
+  /// removing. Empty if the board has no rows yet.
+  List<TileComponent> get bottomRowTiles => _grid.isEmpty
+      ? const []
+      : [for (final tile in _grid.last) if (tile != null) tile];
+
+  /// Clear-row power-up: removes every remaining tile in the bottom-most
+  /// row outright, no matching required, then reflows the rest of the
+  /// stack to fill the gap - the same reading-order collapse [removePair]
+  /// uses after a normal match.
+  void clearBottomRow() {
+    if (_grid.isEmpty) return;
+    final bottomRow = _grid.last;
+    for (var col = 0; col < bottomRow.length; col++) {
+      bottomRow[col]?.removeFromParent();
+      bottomRow[col] = null;
+    }
+    _collapse();
   }
 
   /// Delay between one tile starting its flip and the next - small enough

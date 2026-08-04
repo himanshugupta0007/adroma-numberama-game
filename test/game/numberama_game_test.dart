@@ -216,7 +216,7 @@ void main() {
       const paddingFactor = 0.06;
       final cellSize = tileSize / (1 - paddingFactor);
       final boardWidth = GridComponent.columns * cellSize;
-      final boardHeight = GridComponent.maxRows * cellSize;
+      final boardHeight = game.gridComponent.maxRows * cellSize;
 
       expect(boardWidth, lessThanOrEqualTo(game.size.x + 0.01));
       expect(boardHeight, lessThanOrEqualTo(game.size.y + 0.01));
@@ -318,7 +318,7 @@ void main() {
 
         expect(
           game.gridComponent.tileCount,
-          GridComponent.columns * GridComponent.maxRows,
+          GridComponent.columns * game.gridComponent.maxRows,
         );
         // Rush is a fixed board, not a rising stack - it starts full.
         expect(game.gridComponent.canAddRow, isFalse);

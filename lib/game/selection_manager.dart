@@ -88,6 +88,14 @@ class SelectionManager {
     gameStateNotifier.registerPairCleared(_pointsPerPair);
     gameStateNotifier.incrementMoves();
 
+    await _resolveAfterRemoval();
+  }
+
+  /// Shared bookkeeping after tiles leave the board, whether from a matched
+  /// pair ([_handleValidPair]) or the clear-row power-up ([clearRow]): win
+  /// if that emptied the board, otherwise (Classic only) keep the board
+  /// playable.
+  Future<void> _resolveAfterRemoval() async {
     if (grid.isEmpty) {
       AudioService.instance.playGameOver();
       gameStateNotifier.setPhase(GamePhase.won);
@@ -117,6 +125,22 @@ class SelectionManager {
       // event that can repeat every few seconds all round.
       grid.addRow();
     }
+  }
+
+  /// Clear-row power-up: removes every tile in the bottom-most row
+  /// outright, no matching required - the most direct way to relieve stack
+  /// pressure. Free once per round in Classic; ad-gated (every time, no
+  /// free use) in the Daily Challenge - see [GameState.clearRowAvailable]
+  /// and [PowerBar]. A no-op if the bottom row is already empty.
+  Future<void> clearRow() async {
+    final tiles = grid.bottomRowTiles;
+    if (tiles.isEmpty) return;
+
+    AudioService.instance.playPowerUp();
+    await Future.wait([for (final tile in tiles) tile.playClearAnimation()]);
+
+    grid.clearBottomRow();
+    await _resolveAfterRemoval();
   }
 
   /// Shuffle power-up: re-rolls which value sits in which occupied cell and

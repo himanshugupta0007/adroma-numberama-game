@@ -33,7 +33,7 @@ class HowToPlayDialog extends StatelessWidget {
           const SizedBox(height: 12),
           const _Rule(
             icon: Icons.calculate_rounded,
-            text: 'Or two tiles that add up to 10 - like 4 and 6.',
+            text: 'Or two tiles that add to 10 - like 4 and 6.',
           ),
           const SizedBox(height: 12),
           const _Rule(

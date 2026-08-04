@@ -16,6 +16,7 @@ class GameState {
     this.bestCombo = 0,
     this.shuffleAvailable = true,
     this.hintAvailable = true,
+    this.clearRowAvailable = true,
     this.consecutiveMisses = 0,
     this.rushSecondsRemaining,
     this.startedAt,
@@ -51,6 +52,14 @@ class GameState {
   /// slot as ad-gated instead of offering another free use.
   final bool hintAvailable;
 
+  /// Whether the round's clear-row power-up is available for free right
+  /// now. In Classic this behaves just like [shuffleAvailable]/
+  /// [hintAvailable] - one free use, then ad-gated. In the Daily Challenge
+  /// it's seeded `false` by [GameStateNotifier.startGame] and never turns
+  /// `true` - clearing a row there always requires watching an ad, with no
+  /// free use at all (see [GameStateNotifier.startGame]'s doc).
+  final bool clearRowAvailable;
+
   /// Consecutive invalid pair attempts with no valid pair or power-up use
   /// in between. Drives the power bar's "try shuffle/hint" nudge once the
   /// player looks stuck - see [GameStateNotifier.registerInvalidAttempt].
@@ -75,6 +84,7 @@ class GameState {
     int? bestCombo,
     bool? shuffleAvailable,
     bool? hintAvailable,
+    bool? clearRowAvailable,
     int? consecutiveMisses,
     int? rushSecondsRemaining,
     DateTime? startedAt,
@@ -88,6 +98,7 @@ class GameState {
       bestCombo: bestCombo ?? this.bestCombo,
       shuffleAvailable: shuffleAvailable ?? this.shuffleAvailable,
       hintAvailable: hintAvailable ?? this.hintAvailable,
+      clearRowAvailable: clearRowAvailable ?? this.clearRowAvailable,
       consecutiveMisses: consecutiveMisses ?? this.consecutiveMisses,
       rushSecondsRemaining: rushSecondsRemaining ?? this.rushSecondsRemaining,
       startedAt: startedAt ?? this.startedAt,
@@ -97,7 +108,7 @@ class GameState {
 
   @override
   String toString() =>
-      'GameState(score: $score, moves: $moves, phase: $phase, combo: $combo, bestCombo: $bestCombo, shuffleAvailable: $shuffleAvailable, hintAvailable: $hintAvailable, consecutiveMisses: $consecutiveMisses, rushSecondsRemaining: $rushSecondsRemaining, startedAt: $startedAt, attemptHistory: $attemptHistory)';
+      'GameState(score: $score, moves: $moves, phase: $phase, combo: $combo, bestCombo: $bestCombo, shuffleAvailable: $shuffleAvailable, hintAvailable: $hintAvailable, clearRowAvailable: $clearRowAvailable, consecutiveMisses: $consecutiveMisses, rushSecondsRemaining: $rushSecondsRemaining, startedAt: $startedAt, attemptHistory: $attemptHistory)';
 }
 
 class GameStateNotifier extends StateNotifier<GameState> {
@@ -120,11 +131,23 @@ class GameStateNotifier extends StateNotifier<GameState> {
   ///
   /// [rushSecondsRemaining] is only passed for a Daily Challenge Rush round
   /// - left `null` for Classic, which has no clock.
-  void startGame({bool powerUpsEnabled = true, int? rushSecondsRemaining}) {
+  ///
+  /// [clearRowAvailable] governs the clear-row power-up's *starting* state
+  /// only - unlike [powerUpsEnabled], it isn't a single on/off switch
+  /// shared with shuffle/hint. Classic passes [Difficulty.powerUpsEnabled]
+  /// (same one free use, then ad-gated, as shuffle/hint); the Daily
+  /// Challenge always passes `false` - clearing a row there is ad-gated
+  /// from the very first frame, with no free use at all.
+  void startGame({
+    bool powerUpsEnabled = true,
+    bool clearRowAvailable = true,
+    int? rushSecondsRemaining,
+  }) {
     state = GameState(
       phase: GamePhase.playing,
       shuffleAvailable: powerUpsEnabled,
       hintAvailable: powerUpsEnabled,
+      clearRowAvailable: clearRowAvailable,
       rushSecondsRemaining: rushSecondsRemaining,
       startedAt: DateTime.now(),
     );
@@ -191,6 +214,15 @@ class GameStateNotifier extends StateNotifier<GameState> {
   void useHint() {
     if (!state.hintAvailable) return;
     state = state.copyWith(hintAvailable: false, consecutiveMisses: 0);
+  }
+
+  /// Spends the round's free clear-row use. Idempotent, same as
+  /// [useShuffle]/[useHint] - in the Daily Challenge, where
+  /// [GameState.clearRowAvailable] starts and stays `false`, this is
+  /// always a no-op.
+  void useClearRow() {
+    if (!state.clearRowAvailable) return;
+    state = state.copyWith(clearRowAvailable: false, consecutiveMisses: 0);
   }
 
   void setPhase(GamePhase phase) {

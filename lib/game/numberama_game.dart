@@ -58,7 +58,6 @@ class NumberamaGame extends FlameGame {
   final Random? _random;
 
   static const int columns = GridComponent.columns;
-  static const int maxRows = GridComponent.maxRows;
 
   /// Classic only - how many of the [maxRows] rows are already filled when
   /// a fresh round begins, before the board starts rising on its own.
@@ -128,6 +127,10 @@ class NumberamaGame extends FlameGame {
       selectionManager: selectionManager,
       random: _random,
       maxTileValue: difficulty.maxTileValue,
+      // Daily Rush always fills a fixed 9x8 board (see Difficulty.maxRows'
+      // doc) regardless of the day's tier - only Classic's rising stack
+      // varies board height by difficulty.
+      maxRows: isDaily ? 8 : difficulty.maxRows,
     );
     selectionManager.attachGrid(gridComponent);
 
@@ -151,6 +154,8 @@ class NumberamaGame extends FlameGame {
 
       gameStateNotifier.startGame(
         powerUpsEnabled: difficulty.powerUpsEnabled,
+        // Ad-gated from the first frame - see GameStateNotifier.startGame.
+        clearRowAvailable: false,
         rushSecondsRemaining: _rushSecondsRemaining,
       );
       return;
@@ -167,7 +172,10 @@ class NumberamaGame extends FlameGame {
     );
     add(_autoRowTimer!);
 
-    gameStateNotifier.startGame(powerUpsEnabled: difficulty.powerUpsEnabled);
+    gameStateNotifier.startGame(
+      powerUpsEnabled: difficulty.powerUpsEnabled,
+      clearRowAvailable: difficulty.powerUpsEnabled,
+    );
   }
 
   @override

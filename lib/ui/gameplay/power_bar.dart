@@ -7,10 +7,12 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/message_dialog.dart';
 
-/// The power-up strip: shuffle and hint each get one free use per round,
-/// ad-gated after (see [_handleShuffleTap]/[_handleHintTap]). Both slots
-/// also pulse a "try me" nudge every 3 consecutive invalid taps, in case
-/// the player's stuck and hasn't noticed them.
+/// The power-up strip: shuffle, hint, and clear-row. Shuffle and hint each
+/// get one free use per round, ad-gated after; clear-row follows the same
+/// rule in Classic but is ad-gated from the very first frame in the Daily
+/// Challenge, with no free use at all (see [GameState.clearRowAvailable]).
+/// All three slots also pulse a "try me" nudge every 3 consecutive invalid
+/// taps, in case the player's stuck and hasn't noticed them.
 class PowerBar extends ConsumerStatefulWidget {
   const PowerBar({super.key, required this.selectionManager});
 
@@ -33,6 +35,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
         ref.watch(gameStateProvider.select((s) => s.shuffleAvailable));
     final hintAvailable =
         ref.watch(gameStateProvider.select((s) => s.hintAvailable));
+    final clearRowAvailable =
+        ref.watch(gameStateProvider.select((s) => s.clearRowAvailable));
 
     // Edge-triggered on crossing a multiple of 3 (not just "> 0") so the
     // nudge replays every few misses rather than firing once and going
@@ -66,6 +70,18 @@ class _PowerBarState extends ConsumerState<PowerBar> {
       showMessageDialog(context, 'Watch an ad for a hint — coming soon');
     }
 
+    void handleClearRowTap() {
+      if (clearRowAvailable) {
+        selectionManager.clearRow();
+        ref.read(gameStateProvider.notifier).useClearRow();
+        return;
+      }
+      // Same honest placeholder as shuffle/hint above - no ad SDK wired up
+      // yet. In the Daily Challenge this is the only path: clearRowAvailable
+      // starts false and never flips true there.
+      showMessageDialog(context, 'Watch an ad to clear a row — coming soon');
+    }
+
     return Container(
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
@@ -88,6 +104,14 @@ class _PowerBarState extends ConsumerState<PowerBar> {
             count: hintAvailable ? 1 : null,
             adGated: !hintAvailable,
             onTap: handleHintTap,
+            nudge: _nudgeTick,
+          ),
+          const SizedBox(width: 16),
+          _PowerSlot(
+            icon: Icons.delete_sweep_rounded,
+            count: clearRowAvailable ? 1 : null,
+            adGated: !clearRowAvailable,
+            onTap: handleClearRowTap,
             nudge: _nudgeTick,
           ),
         ],
