@@ -21,9 +21,9 @@ enum Difficulty {
   /// mode - the one clock that mode has, so it's the most direct lever on
   /// pressure. Unused by the Daily Challenge (see class doc).
   double get autoRowIntervalSeconds => switch (this) {
-        Difficulty.easy => 10,
-        Difficulty.medium => 7,
-        Difficulty.hard => 5,
+        Difficulty.easy => 8,
+        Difficulty.medium => 6,
+        Difficulty.hard => 4,
       };
 
   /// Board height (rows) in Classic - [GridComponent.maxRows]. Fixed at 8

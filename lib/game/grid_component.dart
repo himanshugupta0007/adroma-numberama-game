@@ -117,6 +117,16 @@ class GridComponent extends PositionComponent with HasGameReference {
       for (var col = 0; col < _grid[row].length; col++) {
         final tile = _grid[row][col];
         if (tile == null) continue;
+        // A tile's size is fixed at creation time from whatever _tileSize
+        // was then - if onGameResize recalculates it afterward (see
+        // _recalculateMetrics), every tile already on the board would
+        // otherwise keep its stale (old cell pitch) size forever, even once
+        // repositioned to the new grid below. Only freshly-created tiles
+        // (addRow/_topUpBottomRow, which pass the *current* _tileSize) would
+        // be sized correctly, so already-placed tiles would visibly overlap
+        // their neighbors until they happen to get cleared - sync every
+        // active tile's size here too, not just its position.
+        if (tile.size.x != _tileSize) tile.size = Vector2.all(_tileSize);
         final target = _positionForCell(row, col, totalRows: totalRows);
         if (tile.position == target) continue;
         // A previous layout pass (e.g. an earlier addRow() called in the
@@ -183,16 +193,22 @@ class GridComponent extends PositionComponent with HasGameReference {
             if (tile != null) tile,
       ];
 
-  /// Appends a new row of random 1-10 tiles at the bottom of the rectangle,
-  /// pushing every existing row up by one cell height - unless the current
-  /// bottom row is a short one left behind by [_collapse] (fewer than
-  /// [columns] tiles, e.g. after a pair clears and the remaining tiles
-  /// reflow), in which case this tops that row up to [columns] tiles
-  /// instead of stacking an entirely new row underneath/above it. Without
-  /// that check, a 2-3 tile row would count identically toward [maxRows] as
-  /// a full one - wasting board capacity and both looking wrong (a mostly
-  /// empty row sitting right next to a freshly-added full one) and ending
-  /// the round sooner than the visible tile count would suggest.
+  /// Called whenever a row-add event fires - the auto-row timer's tick, or
+  /// [SelectionManager]'s stuck-board recovery loop. Does two things, in
+  /// order:
+  ///
+  /// 1. If the bottom-most row is a short one left behind by [_collapse]
+  ///    (fewer than [columns] tiles, e.g. after a pair clears and the
+  ///    remaining tiles reflow), tops it back up to [columns] tiles first -
+  ///    see [_topUpBottomRow]. A match itself never triggers this (the short
+  ///    row is left lingering, same as any other in-progress board state) -
+  ///    only an actual row-add event does, so Classic's win condition (clear
+  ///    every tile) stays reachable through ordinary play instead of every
+  ///    match getting silently refunded by an immediate top-up.
+  /// 2. Always appends a brand new, always-full row of random 1-10 tiles at
+  ///    the bottom of the rectangle, pushing every existing row up by one
+  ///    cell height - unless [maxRows] is already reached, in which case
+  ///    only step 1 (if applicable) happens.
   ///
   /// [animate] should be `false` for the silent initial fill (several calls
   /// back-to-back with no frame tick in between, so there's nothing to
@@ -209,8 +225,8 @@ class GridComponent extends PositionComponent with HasGameReference {
   void addRow({bool animate = true}) {
     if (_grid.isNotEmpty && _grid.last.length < columns) {
       _topUpBottomRow(animate: animate);
-      return;
     }
+    if (_grid.length >= maxRows) return;
 
     final rowIndex = _grid.length;
     final newTotalRows = rowIndex + 1;
@@ -469,6 +485,14 @@ class GridComponent extends PositionComponent with HasGameReference {
     await Future.wait([for (var i = 0; i < tiles.length; i++) reveal(i)]);
   }
 
+  /// Reflows every remaining tile into compact rows in reading order after
+  /// a removal (a matched pair, or the whole bottom row via the clear-row
+  /// power-up). This can leave the new bottom-most row short (fewer than
+  /// [columns] tiles) if the remaining count isn't a multiple of [columns] -
+  /// left as-is here rather than topped up immediately (see [addRow]'s doc
+  /// for why: an immediate top-up on every match would refund tiles almost
+  /// as fast as they're cleared, making Classic's "clear every tile to win"
+  /// condition practically unreachable through ordinary play).
   void _collapse() {
     final remaining = <TileComponent>[
       for (final row in _grid)

@@ -1,12 +1,27 @@
 import 'dart:math';
 
 import 'package:flame_test/flame_test.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:numberama/game/grid_component.dart';
 import 'package:numberama/game/numberama_game.dart';
 import 'package:numberama/game/tile_component.dart';
 import 'package:numberama/state/difficulty.dart';
 import 'package:numberama/state/game_state.dart';
+
+/// AudioService (played on every match/mismatch/power-up) reaches for a
+/// real platform channel the very first time it's touched. Without a
+/// binding + a mocked handler for it, that first call throws synchronously
+/// out of whatever triggered it (e.g. a valid-pair tap), which can abort
+/// the test before its own assertions even run - not something any
+/// individual test should have to work around itself.
+void _mockAudioPlatformChannels() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  for (final name in ['xyz.luan/audioplayers.global', 'xyz.luan/audioplayers']) {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(MethodChannel(name), (call) async => null);
+  }
+}
 
 /// Finds two currently-active tiles that would form a valid pair (equal
 /// value, or summing to 10), if any exist.
@@ -64,6 +79,8 @@ Future<void> _advance(NumberamaGame game, double seconds) async {
 }
 
 void main() {
+  _mockAudioPlatformChannels();
+
   testWithGame<NumberamaGame>(
     'populates a 9-column grid with 3 initial rows on load',
     () => NumberamaGame(
@@ -220,6 +237,88 @@ void main() {
 
       expect(boardWidth, lessThanOrEqualTo(game.size.x + 0.01));
       expect(boardHeight, lessThanOrEqualTo(game.size.y + 0.01));
+    },
+  );
+
+  testWithGame<NumberamaGame>(
+    'tiles already on the board are resized (not just repositioned) when '
+    'the canvas is resized after load',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
+    (game) async {
+      await game.ready();
+      // .clone() - `size` is a live NotifyingVector2 that the fix below
+      // mutates in place, so a plain reference would silently track the
+      // post-resize value too and this comparison would trivially pass.
+      final sizeBeforeResize = game.gridComponent.activeTiles.first.size.clone();
+
+      // Shrink the canvas well below its original size - since cell size is
+      // derived from the canvas (see GridComponent._recalculateMetrics),
+      // every tile's target size shrinks too.
+      game.onGameResize(game.size / 2);
+      await game.ready();
+
+      for (final tile in game.gridComponent.activeTiles) {
+        expect(tile.size, isNot(sizeBeforeResize),
+            reason: 'every already-placed tile should pick up the new '
+                '(smaller) cell size on resize, not just tiles created '
+                'afterward - a stale size here is what makes tiles visibly '
+                'overlap their neighbors until they happen to get cleared '
+                'and replaced');
+      }
+    },
+  );
+
+  testWithGame<NumberamaGame>(
+    'a short bottom row left by a collapse lingers until the next addRow(), '
+    'which tops it up AND appends a genuinely new full row on top of that',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(3),
+        autoRowIntervalSeconds: _noAutoRows),
+    (game) async {
+      await game.ready();
+      // A couple of extra rows so the board has more than one row of tiles
+      // to clear a pair out of - a single-row board can never end up short
+      // (clearing its only row just wins the round).
+      game.gridComponent.addRow(animate: false);
+      game.gridComponent.addRow(animate: false);
+
+      final pair = _findValidPair(game.gridComponent.activeTiles);
+      expect(pair, isNotNull);
+      final [tileA, tileB] = pair!;
+      game.selectionManager.onTileTapped(tileA);
+      game.selectionManager.onTileTapped(tileB);
+      await _settle(game);
+
+      final afterMatch = game.gridComponent.tileCount;
+      final shortfall = (GridComponent.columns -
+              afterMatch % GridComponent.columns) %
+          GridComponent.columns;
+      expect(
+        shortfall,
+        greaterThan(0),
+        reason: 'a single match out of a 27-tile board should always leave '
+            'the bottom row short by construction (27 is a multiple of 9, '
+            'and only 2 tiles were removed) - this is what the rest of the '
+            'test actually exercises. A gap should still be lingering here, '
+            'not already topped up - an immediate top-up on every match '
+            'would refund tiles almost as fast as they clear, making '
+            "Classic's win condition practically unreachable.",
+      );
+
+      game.gridComponent.addRow();
+      await _settle(game);
+
+      expect(
+        game.gridComponent.tileCount,
+        afterMatch + shortfall + GridComponent.columns,
+        reason: 'addRow() should both top the lingering short row back up '
+            'to a full row AND append a genuinely new full row underneath - '
+            'not just one or the other',
+      );
     },
   );
 
