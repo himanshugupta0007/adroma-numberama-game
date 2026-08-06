@@ -135,9 +135,22 @@ class GridComponent extends PositionComponent with HasGameReference {
         // started. Without clearing it first, both effects would fight
         // over the same tile's position once ticking begins - visible as
         // rows snapping to the wrong slot or briefly overlapping.
-        tile.children.whereType<MoveEffect>().toList().forEach(
-              (effect) => effect.removeFromParent(),
-            );
+        //
+        // This can also interrupt a tile's in-flight *shake* (see
+        // TileComponent.playShakeAnimation, also a MoveEffect) - e.g. the
+        // auto-row timer fires while an invalid pair is still mid-shake.
+        // Flame only calls an effect's onComplete from its own update() on
+        // natural completion, never from a forced removeFromParent(), so
+        // silently dropping it here would strand whatever that callback was
+        // guarding - the shake's onComplete is what resets the tile back to
+        // idle and tells SelectionManager to release its selection, so
+        // skipping it leaves both tiles selected-but-unresettable and the
+        // board permanently unresponsive to taps. Fire it manually first so
+        // interrupting the effect still lets its callback run.
+        tile.children.whereType<MoveEffect>().toList().forEach((effect) {
+          effect.onComplete?.call();
+          effect.removeFromParent();
+        });
         if (animate) {
           tile.add(
             MoveEffect.to(

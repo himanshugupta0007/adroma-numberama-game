@@ -154,6 +154,54 @@ void main() {
   );
 
   testWithGame<NumberamaGame>(
+    'a row rising mid-shake still releases the selection afterwards',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: _noAutoRows),
+    (game) async {
+      await game.ready();
+
+      final tiles = game.gridComponent.activeTiles;
+      final pair = _findInvalidPair(tiles);
+      expect(pair, isNotNull);
+      final [tileA, tileB] = pair!;
+
+      game.selectionManager.onTileTapped(tileA);
+      game.selectionManager.onTileTapped(tileB);
+
+      // The shake (see TileComponent.playShakeAnimation) takes ~0.4s total.
+      // Interrupt it partway through with a row rising - e.g. the auto-row
+      // timer firing mid-shake in a real round - and make sure that still
+      // lets the shake's completion (which resets visualState and tells
+      // SelectionManager to release the selection) run instead of stranding
+      // both tiles mid-animation and freezing every future tap.
+      await _advance(game, 0.1);
+      game.gridComponent.addRow();
+      await _settle(game);
+
+      expect(tileA.visualState, TileVisualState.idle);
+      expect(tileB.visualState, TileVisualState.idle);
+
+      final freshPair = _findValidPair(
+        game.gridComponent.activeTiles.where((t) => t != tileA && t != tileB).toList(),
+      );
+      expect(freshPair, isNotNull,
+          reason: 'expected a fresh valid pair to confirm the board still '
+              'responds to taps');
+      final [freshA, freshB] = freshPair!;
+      game.selectionManager.onTileTapped(freshA);
+      expect(freshA.visualState, TileVisualState.selected,
+          reason: 'board should still respond to taps after the row-rise/'
+              'shake race');
+      game.selectionManager.onTileTapped(freshB);
+      await _settle(game);
+      expect(game.gridComponent.activeTiles.contains(freshA), isFalse,
+          reason: 'the fresh pair should still be clearable normally');
+    },
+  );
+
+  testWithGame<NumberamaGame>(
     'addRow appends 9 more tiles',
     () => NumberamaGame(
         gameStateNotifier: GameStateNotifier(),
