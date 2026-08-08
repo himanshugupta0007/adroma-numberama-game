@@ -5,11 +5,13 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../services/ad_service.dart';
 import '../../state/difficulty.dart';
 import '../../state/game_mode.dart';
 import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ad_banner_widget.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
 import '../../widgets/message_dialog.dart';
@@ -107,6 +109,27 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
   final _shareCardKey = GlobalKey();
 
   bool _isSharing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowInterstitial());
+  }
+
+  /// Shows the preloaded interstitial roughly every third Classic round -
+  /// frequent enough to matter for revenue, spaced out enough not to punish
+  /// every single round. Skipped entirely for a "Remove Ads" purchase, and
+  /// for the Daily Challenge (its result only happens once a day, a much
+  /// softer moment than a Classic round the player can immediately replay).
+  /// A no-op if no interstitial happens to be preloaded yet - this never
+  /// blocks on a load, per [AdService.showInterstitial].
+  void _maybeShowInterstitial() {
+    if (!mounted) return;
+    if (widget.isDaily) return;
+    if (ref.read(preferencesServiceProvider).removeAdsPurchased) return;
+    if (widget.classicRoundNumber % 3 != 0) return;
+    AdService.instance.showInterstitial();
+  }
 
   Future<void> _shareResult() async {
     if (_isSharing) return;
@@ -312,6 +335,7 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
                     ),
                   ),
                 ),
+                const Center(child: AdBannerWidget()),
                 const BottomNavBar(activeTab: HomeTab.results),
               ],
             ),

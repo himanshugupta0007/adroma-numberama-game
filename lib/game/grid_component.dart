@@ -59,9 +59,21 @@ class GridComponent extends PositionComponent with HasGameReference {
   late double _cellSize;
   late double _tileSize;
 
+  /// Every [TileComponent] is a child of this, not of the [GridComponent]
+  /// itself - clips them to exactly the play-field rectangle so a tile
+  /// mid-animation (a match's collapse reflow, a new row rising and
+  /// shifting every existing row up, both drive the same [_applyLayout])
+  /// can never render past the boundary, whatever the exact cause of a
+  /// given frame's position momentarily overshooting it. Sized/positioned
+  /// alongside the boundary itself in [_recalculateMetrics] - both cover
+  /// exactly the same rectangle, this one just also clips.
+  late final ClipComponent _tileLayer;
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    _tileLayer = ClipComponent.rectangle(size: Vector2.zero());
+    await add(_tileLayer);
     _recalculateMetrics();
   }
 
@@ -93,6 +105,7 @@ class GridComponent extends PositionComponent with HasGameReference {
       (game.size.x - boardWidth) / 2,
       (game.size.y - boardHeight) / 2,
     );
+    _tileLayer.size = Vector2(boardWidth, boardHeight);
   }
 
   /// Pixel position (relative to this component) of the cell at [row]/[col]
@@ -253,7 +266,7 @@ class GridComponent extends PositionComponent with HasGameReference {
         size: Vector2.all(_tileSize),
       );
       row.add(tile);
-      add(tile);
+      _tileLayer.add(tile);
     }
     _grid.add(row);
     _applyLayout(animate: animate);
@@ -276,7 +289,7 @@ class GridComponent extends PositionComponent with HasGameReference {
         size: Vector2.all(_tileSize),
       );
       row.add(tile);
-      add(tile);
+      _tileLayer.add(tile);
     }
     _applyLayout(animate: animate);
   }
@@ -401,7 +414,7 @@ class GridComponent extends PositionComponent with HasGameReference {
           size: Vector2.all(_tileSize),
         );
         rowTiles.add(tile);
-        add(tile);
+        _tileLayer.add(tile);
       }
       _grid.add(rowTiles);
     }

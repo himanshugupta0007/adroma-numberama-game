@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/ad_service.dart';
 import '../services/notification_service.dart';
 import '../services/rate_service.dart';
 import '../state/preferences_service.dart';
@@ -23,7 +24,7 @@ import 'home/bottom_nav_bar.dart';
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
-  static const _supportEmail = 'himanshugupta0007@gmail.com';
+  static const _supportEmail = 'adromagames@gmail.com';
 
   static const _privacyPolicyUrl =
       'https://himanshugupta0007.github.io/adroma-game-policies/';
@@ -252,11 +253,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           SettingsRow(
                             label: 'Manage Ad Preferences',
                             trailing: _chevron(),
-                            // TODO(ads): reopen UMP consent form here - keep
-                            // this row visible even as a stub, it's a GDPR
-                            // requirement once AdMob is live.
+                            // A no-op for players outside the EEA/UK, whose
+                            // region never required a consent form in the
+                            // first place - see AdService.
+                            // showPrivacyOptionsForm. Left visible
+                            // unconditionally rather than only for players
+                            // it applies to, since a GDPR consent form
+                            // itself only reaches EEA/UK players.
                             onTap: () =>
-                                _showComingSoon(context, 'Ad preferences'),
+                                AdService.instance.showPrivacyOptionsForm(),
                           ),
                         ],
                       ),

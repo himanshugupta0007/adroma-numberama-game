@@ -37,6 +37,14 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!-- AdMob app ID, required by the SDK before any ad is requested.
+             This is Google's published *test* App ID - swap it for the real
+             one from the AdMob console (Apps > App settings) before release,
+             or every ad request will keep serving as test inventory. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713"/>
+
         <!-- flutter_local_notifications: redelivers a scheduled notification
              when its fire time arrives, and re-registers pending ones after
              a device reboot. -->

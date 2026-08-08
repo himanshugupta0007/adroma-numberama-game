@@ -24,6 +24,24 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- AdMob app ID, required by the SDK before any ad is requested. This
+	     is Google's published *test* App ID - swap it for the real one from
+	     the AdMob console (Apps > App settings) before release, or every ad
+	     request will keep serving as test inventory. -->
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<!-- Google's own SKAdNetwork ID, for ad-attribution reporting on iOS 14+.
+	     This is the one entry Google requires directly; a fuller list of
+	     mediated ad networks' IDs (only needed once other ad networks are
+	     added via mediation) lives at
+	     https://developers.google.com/admob/ios/general#skadnetwork -->
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

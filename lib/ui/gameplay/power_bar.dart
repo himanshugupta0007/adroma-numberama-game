@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/selection_manager.dart';
+import '../../services/ad_service.dart';
 import '../../state/game_state.dart';
+import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/message_dialog.dart';
@@ -14,9 +16,26 @@ import '../../widgets/message_dialog.dart';
 /// All three slots also pulse a "try me" nudge every 3 consecutive invalid
 /// taps, in case the player's stuck and hasn't noticed them.
 class PowerBar extends ConsumerStatefulWidget {
-  const PowerBar({super.key, required this.selectionManager});
+  const PowerBar({
+    super.key,
+    required this.selectionManager,
+    required this.onAdWillShow,
+    required this.onAdClosed,
+  });
 
   final SelectionManager selectionManager;
+
+  /// Called right before a rewarded ad is requested to show, so the caller
+  /// (the gameplay screen) can pause the Flame engine behind it - otherwise
+  /// the board keeps ticking (the auto-row timer included) while the ad
+  /// covers the screen, invisible to the player until it closes.
+  final VoidCallback onAdWillShow;
+
+  /// Called once the rewarded ad's full-screen content is actually gone -
+  /// reward earned or not, closed normally, failed to show, or (since no ad
+  /// was ever shown to close) immediately if none was ready - so the
+  /// pause from [onAdWillShow] always gets undone exactly once.
+  final VoidCallback onAdClosed;
 
   @override
   ConsumerState<PowerBar> createState() => _PowerBarState();
@@ -49,15 +68,35 @@ class _PowerBarState extends ConsumerState<PowerBar> {
       },
     );
 
+    // Once ad-gated, a slot's power-up is granted by watching a rewarded ad
+    // to completion - [AdService.showRewarded]'s [onUserEarnedReward] only
+    // fires then, never on an early close/skip, so `grant` below can't run
+    // for a bailed-out ad. A "Remove Ads" purchase (once Settings' stub is
+    // wired up) skips the ad entirely and just grants the power-up outright
+    // - there's no ad left to watch once a player has paid to remove them.
+    void watchAdFor(VoidCallback grant) {
+      if (ref.read(preferencesServiceProvider).removeAdsPurchased) {
+        grant();
+        return;
+      }
+      widget.onAdWillShow();
+      final shown = AdService.instance.showRewarded(
+        onUserEarnedReward: grant,
+        onAdClosed: widget.onAdClosed,
+      );
+      if (!shown) {
+        widget.onAdClosed();
+        showMessageDialog(context, 'Ad not ready yet — try again in a moment');
+      }
+    }
+
     void handleShuffleTap() {
       if (shuffleAvailable) {
         selectionManager.shuffle();
         ref.read(gameStateProvider.notifier).useShuffle();
         return;
       }
-      // No ad SDK wired up yet - honest placeholder, same pattern as the
-      // results screen's "Share result" button.
-      showMessageDialog(context, 'Watch an ad for a shuffle — coming soon');
+      watchAdFor(selectionManager.shuffle);
     }
 
     void handleHintTap() {
@@ -66,8 +105,7 @@ class _PowerBarState extends ConsumerState<PowerBar> {
         ref.read(gameStateProvider.notifier).useHint();
         return;
       }
-      // Same honest placeholder as shuffle above - no ad SDK wired up yet.
-      showMessageDialog(context, 'Watch an ad for a hint — coming soon');
+      watchAdFor(selectionManager.hint);
     }
 
     void handleClearRowTap() {
@@ -76,10 +114,9 @@ class _PowerBarState extends ConsumerState<PowerBar> {
         ref.read(gameStateProvider.notifier).useClearRow();
         return;
       }
-      // Same honest placeholder as shuffle/hint above - no ad SDK wired up
-      // yet. In the Daily Challenge this is the only path: clearRowAvailable
+      // In the Daily Challenge this is the only path: clearRowAvailable
       // starts false and never flips true there.
-      showMessageDialog(context, 'Watch an ad to clear a row — coming soon');
+      watchAdFor(selectionManager.clearRow);
     }
 
     return Container(

@@ -87,6 +87,7 @@ class PreferencesService {
   static const _appOpenCountKey = 'app_open_count';
   static const _hasRatedKey = 'has_rated';
   static const _lastRatePromptDateKey = 'last_rate_prompt_date';
+  static const _removeAdsPurchasedKey = 'remove_ads_purchased';
 
   /// Whether the one-time "How to Play" dialog has already been shown.
   bool get hasSeenHowToPlay =>
@@ -316,6 +317,18 @@ class PreferencesService {
         .inDays;
     return elapsedDays >= 4;
   }
+
+  /// Whether the "Remove Ads" IAP has been bought - `false` until that
+  /// purchase flow (still a Settings stub, see `SettingsRow` "Remove Ads")
+  /// is wired up and verifies a real transaction. Every ad-showing call
+  /// site (interstitials, banners, and the rewarded power-ups in
+  /// [PowerBar]) checks this first and skips straight to the free/granted
+  /// outcome instead of calling `AdService` at all.
+  bool get removeAdsPurchased =>
+      (_box.get(_removeAdsPurchasedKey) as bool?) ?? false;
+
+  Future<void> setRemoveAdsPurchased(bool value) =>
+      _box.put(_removeAdsPurchasedKey, value);
 
   /// Wipes every durable value this app keeps locally - all-time and
   /// period-bucketed best scores, daily-played gate, daily play history,

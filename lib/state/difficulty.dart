@@ -4,7 +4,7 @@
 /// Daily tier on the same day, the same way everyone gets the same puzzle.
 ///
 /// The Daily Challenge is a Rush round (see [rushPairDistanceRange]/
-/// [rushSumPairChance]/[dailyRushDuration]), not Classic's rising stack -
+/// [rushSumPairChance]/[rushDuration]), not Classic's rising stack -
 /// [autoRowIntervalSeconds]/[initialRows] only take effect in Classic.
 enum Difficulty {
   easy,
@@ -21,9 +21,9 @@ enum Difficulty {
   /// mode - the one clock that mode has, so it's the most direct lever on
   /// pressure. Unused by the Daily Challenge (see class doc).
   double get autoRowIntervalSeconds => switch (this) {
-        Difficulty.easy => 8,
-        Difficulty.medium => 6,
-        Difficulty.hard => 4,
+        Difficulty.easy => 15,
+        Difficulty.medium => 12,
+        Difficulty.hard => 10,
       };
 
   /// Board height (rows) in Classic - [GridComponent.maxRows]. Fixed at 8
@@ -49,11 +49,6 @@ enum Difficulty {
         Difficulty.medium => 3,
         Difficulty.hard => (maxRows / 2).ceil(),
       };
-
-  /// Whether shuffle/hint are offered at all this round - removed
-  /// entirely on [hard] (shown ad-gated from the very first frame) rather
-  /// than merely harder to earn. Applies to both Classic and Daily.
-  bool get powerUpsEnabled => this != Difficulty.hard;
 
   /// Tile face values are drawn from 1..[maxTileValue] - fixed at 10 for
   /// every tier (Classic and Daily alike), so pace (see
@@ -82,6 +77,18 @@ enum Difficulty {
         Difficulty.hard => 0.75,
       };
 
+  /// Daily Rush only: how long the countdown starts at - the one clock that
+  /// mode has, so it's the direct lever on pressure there, the same role
+  /// [autoRowIntervalSeconds] plays in Classic. Shorter on [hard] (less time
+  /// to work with, on top of [rushPairDistanceRange]'s far-apart pairs and
+  /// [rushSumPairChance]'s harder mental math already making each pair
+  /// slower to find).
+  Duration get rushDuration => switch (this) {
+        Difficulty.easy => const Duration(seconds: 15),
+        Difficulty.medium => const Duration(seconds: 12),
+        Difficulty.hard => const Duration(seconds: 10),
+      };
+
   /// Deterministic difficulty-of-the-day: every player sees the same tier
   /// on the same calendar date (in that date's local calendar day, not
   /// wall-clock time), and it rotates so consecutive days differ.
@@ -92,11 +99,6 @@ enum Difficulty {
     return Difficulty.values[dayOfYear % Difficulty.values.length];
   }
 }
-
-/// The Daily Challenge Rush round length - the one knob to retune the
-/// countdown. Change this value; nothing else needs to change (tests
-/// override it directly via [NumberamaGame]'s constructor instead).
-const Duration dailyRushDuration = Duration(seconds: 60);
 
 /// A per-day identifier shown alongside the daily board (e.g. "SEED #0714"
 /// for July 14th) - and something for the results share card to reference.

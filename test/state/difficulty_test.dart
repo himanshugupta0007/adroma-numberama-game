@@ -40,16 +40,18 @@ void main() {
       expect(Difficulty.medium.initialRows, lessThan(Difficulty.hard.initialRows));
     });
 
-    test('only hard removes power-ups entirely', () {
-      expect(Difficulty.easy.powerUpsEnabled, isTrue);
-      expect(Difficulty.medium.powerUpsEnabled, isTrue);
-      expect(Difficulty.hard.powerUpsEnabled, isFalse);
-    });
-
     test('tile value range is the same 1-10 spread on every tier', () {
       expect(Difficulty.easy.maxTileValue, 10);
       expect(Difficulty.medium.maxTileValue, 10);
       expect(Difficulty.hard.maxTileValue, 10);
+    });
+
+    test('Daily Rush countdown is shorter on harder tiers', () {
+      expect(Difficulty.hard.rushDuration, const Duration(seconds: 10));
+      expect(Difficulty.medium.rushDuration, const Duration(seconds: 12));
+      expect(Difficulty.easy.rushDuration, const Duration(seconds: 15));
+      expect(Difficulty.hard.rushDuration, lessThan(Difficulty.medium.rushDuration));
+      expect(Difficulty.medium.rushDuration, lessThan(Difficulty.easy.rushDuration));
     });
   });
 }

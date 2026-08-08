@@ -167,9 +167,9 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
   /// A simple, tunable heuristic for the Daily Challenge's star rating: 0
   /// on a loss, otherwise 1 star just for clearing the board plus one more
   /// for each combo-streak threshold reached. Scales naturally with
-  /// difficulty since Hard's missing power-ups and far-apart pair
-  /// placement make a long combo harder to sustain in the first place - no
-  /// separate per-tier thresholds needed.
+  /// difficulty since Hard's far-apart pair placement (see
+  /// [Difficulty.rushPairDistanceRange]) makes a long combo harder to
+  /// sustain in the first place - no separate per-tier thresholds needed.
   int _starsForDaily(int bestCombo, {required bool won}) {
     if (!won) return 0;
     var stars = 1;
@@ -271,7 +271,11 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
                       ),
                     ),
                   ),
-                  PowerBar(selectionManager: _game.selectionManager),
+                  PowerBar(
+                    selectionManager: _game.selectionManager,
+                    onAdWillShow: _game.pauseEngine,
+                    onAdClosed: _game.resumeEngine,
+                  ),
                 ],
               ),
             ),

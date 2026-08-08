@@ -54,19 +54,19 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyB3aGa5EE5kRcirkhIzKYZ4NBhi1zd__Eo',
-    appId: '1:933332666357:android:9ecff65a8a930cd619c2bc',
-    messagingSenderId: '933332666357',
-    projectId: 'adroma-numberama',
-    storageBucket: 'adroma-numberama.firebasestorage.app',
+    apiKey: 'AIzaSyA2RA9s2-i42oA0FqvGaNfSbue5aQweY34',
+    appId: '1:389425061595:android:f7556a7a9608d5d3ddb6fe',
+    messagingSenderId: '389425061595',
+    projectId: 'adroma-numberama-1',
+    storageBucket: 'adroma-numberama-1.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCRPNlnFdRhpQdy8zvV8M5eCQglzCcvixo',
-    appId: '1:933332666357:ios:96576389a9cecf3119c2bc',
-    messagingSenderId: '933332666357',
-    projectId: 'adroma-numberama',
-    storageBucket: 'adroma-numberama.firebasestorage.app',
+    apiKey: 'AIzaSyBylXLDZgcO_l2Pk_LsVqV0nIequUuII1E',
+    appId: '1:389425061595:ios:28e0adc6de00592cddb6fe',
+    messagingSenderId: '389425061595',
+    projectId: 'adroma-numberama-1',
+    storageBucket: 'adroma-numberama-1.firebasestorage.app',
     iosBundleId: 'com.adroma.numberama',
   );
 }

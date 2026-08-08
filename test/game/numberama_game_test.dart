@@ -408,6 +408,33 @@ void main() {
   );
 
   testWithGame<NumberamaGame>(
+    'the round ends on the very tick that fills the board, not the tick after',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(1),
+        autoRowIntervalSeconds: 0.5),
+    (game) async {
+      await game.ready();
+
+      // One row short of full - the upcoming auto-row tick is the one that
+      // fills the board, not a later one.
+      while (game.gridComponent.canAddRow &&
+          game.gridComponent.tileCount <
+              GridComponent.columns * (game.gridComponent.maxRows - 1)) {
+        game.gridComponent.addRow();
+      }
+      await game.ready();
+      expect(game.gridComponent.canAddRow, isTrue);
+
+      await _advance(game, 0.5);
+
+      // A second tick's worth of margin would mask the regression this
+      // guards - the whole point is that one tick is already enough.
+      expect(game.gameStateNotifier.state.phase, GamePhase.lost);
+    },
+  );
+
+  testWithGame<NumberamaGame>(
     'every difficulty generates tile values from the same 1-10 range',
     () => NumberamaGame(
         gameStateNotifier: GameStateNotifier(),
@@ -425,7 +452,7 @@ void main() {
   );
 
   testWithGame<NumberamaGame>(
-    'hard difficulty starts with both power-ups already ad-gated',
+    'hard difficulty still gets one free shuffle/hint, same as every tier',
     () => NumberamaGame(
         gameStateNotifier: GameStateNotifier(),
         difficulty: Difficulty.hard,
@@ -435,8 +462,8 @@ void main() {
       await game.ready();
 
       expect(game.initialRows, Difficulty.hard.initialRows);
-      expect(game.gameStateNotifier.state.shuffleAvailable, isFalse);
-      expect(game.gameStateNotifier.state.hintAvailable, isFalse);
+      expect(game.gameStateNotifier.state.shuffleAvailable, isTrue);
+      expect(game.gameStateNotifier.state.hintAvailable, isTrue);
     },
   );
 

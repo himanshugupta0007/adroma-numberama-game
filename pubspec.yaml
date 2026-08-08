@@ -28,13 +28,37 @@ dependencies:
   in_app_review: ^2.0.12
   firebase_core: ^4.13.0
   firebase_analytics: ^12.4.6
+  google_mobile_ads: ^9.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
   flame_test: ^2.2.2
+  flutter_launcher_icons: ^0.14.4
 flutter:
   uses-material-design: true
   assets:
     - assets/sounds/
+    - assets/image/icon/
+
+# Generates android/app/src/main/res/mipmap-*/ic_launcher.png and
+# ios/Runner/Assets.xcassets/AppIcon.appiconset/*.png from the same source
+# image - run `dart run flutter_launcher_icons` after changing
+# assets/image/icon/img.png to regenerate both platforms' icons.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/image/icon/img.png"
+  # iOS rejects App Store icons with an alpha channel - the source PNG is
+  # RGBA (fully opaque, but still carries the channel), so this flattens it
+  # onto plain black before generating the iOS set. Android's icons keep
+  # the original.
+  remove_alpha_ios: true
+  # Android 8+ adaptive icon: background matches the icon artwork's own
+  # navy backdrop (AppColors.bgDeep) and the foreground is the same image,
+  # letterboxed to size in the same navy - launcher masks on the two round
+  # tiles read fine, so no separate padded/transparent foreground asset is
+  # needed here.
+  adaptive_icon_background: "#0D1024"
+  adaptive_icon_foreground: "assets/image/icon/img.png"

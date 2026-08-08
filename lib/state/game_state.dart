@@ -123,21 +123,25 @@ class GameStateNotifier extends StateNotifier<GameState> {
   /// round begins after a previous one finished, so it must not carry over
   /// the prior round's score/moves via [copyWith].
   ///
-  /// [powerUpsEnabled] false (a Hard Daily Challenge) starts the round with
-  /// both shuffle and hint already showing ad-gated instead of the usual
-  /// one free use each - there's no separate "not offered this round" UI
-  /// state, so "start already spent" reuses the existing ad-gated look to
-  /// mean "removed entirely".
+  /// [powerUpsEnabled] false starts the round with shuffle and hint already
+  /// showing ad-gated instead of the usual one free use each - there's no
+  /// separate "not offered this round" UI state, so "start already spent"
+  /// reuses the existing ad-gated look to mean "removed entirely". Every
+  /// [Difficulty] tier (Hard included) currently gets one free use of each,
+  /// same as [clearRowAvailable] in Classic below - this parameter stays
+  /// available as a hook for a future round type that wants to remove
+  /// power-ups outright, rather than as something any current caller varies.
   ///
   /// [rushSecondsRemaining] is only passed for a Daily Challenge Rush round
   /// - left `null` for Classic, which has no clock.
   ///
   /// [clearRowAvailable] governs the clear-row power-up's *starting* state
-  /// only - unlike [powerUpsEnabled], it isn't a single on/off switch
-  /// shared with shuffle/hint. Classic passes [Difficulty.powerUpsEnabled]
-  /// (same one free use, then ad-gated, as shuffle/hint); the Daily
+  /// only - unlike [powerUpsEnabled], it isn't a single on/off switch shared
+  /// with shuffle/hint. Classic leaves it at the default `true` (one free
+  /// use, then ad-gated, same as shuffle/hint, at every tier); the Daily
   /// Challenge always passes `false` - clearing a row there is ad-gated
-  /// from the very first frame, with no free use at all.
+  /// from the very first frame, with no free use at all, regardless of
+  /// tier.
   void startGame({
     bool powerUpsEnabled = true,
     bool clearRowAvailable = true,

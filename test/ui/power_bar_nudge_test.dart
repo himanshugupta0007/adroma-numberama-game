@@ -24,7 +24,11 @@ void main() {
             body: Column(
               children: [
                 SizedBox(height: 400, width: 400, child: GameWidget(game: game)),
-                PowerBar(selectionManager: game.selectionManager),
+                PowerBar(
+                  selectionManager: game.selectionManager,
+                  onAdWillShow: () {},
+                  onAdClosed: () {},
+                ),
               ],
             ),
           ),

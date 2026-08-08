@@ -21,13 +21,11 @@ class AudioService {
   static final _matchClip = AssetSource('sounds/match-sound.mp3');
   static final _mismatchClip = AssetSource('sounds/mis-match-sound.mp3');
   static final _powerUpClip = AssetSource('sounds/shuffle-powerup.mp3');
-  static final _finalCountdownClip = AssetSource('sounds/final-count-down.mp3');
   static final _gameOverClip = AssetSource('sounds/game-over.mp3');
 
   final _matchPlayer = AudioPlayer();
   final _mismatchPlayer = AudioPlayer();
   final _powerUpPlayer = AudioPlayer();
-  final _finalCountdownPlayer = AudioPlayer();
   final _gameOverPlayer = AudioPlayer();
 
   bool _enabled = true;
@@ -46,12 +44,6 @@ class AudioService {
   /// Shuffle or hint power-up used - the same clip covers both by design,
   /// not an omission.
   void playPowerUp() => _play(_powerUpPlayer, _powerUpClip);
-
-  /// A handful of seconds left before the round can end - Classic once the
-  /// stack is full and stuck (see `NumberamaGame.update`), Daily Rush once
-  /// the countdown is nearly out (see `NumberamaGame._tickRushCountdown`).
-  void playFinalCountdown() =>
-      _play(_finalCountdownPlayer, _finalCountdownClip);
 
   /// The round just ended - board cleared (win) or stuck with nowhere left
   /// to grow (loss). Same clip covers both, same reasoning as

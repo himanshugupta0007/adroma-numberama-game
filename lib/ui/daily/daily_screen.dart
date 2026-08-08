@@ -6,6 +6,7 @@ import '../../state/game_mode.dart';
 import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ad_banner_widget.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
 import '../../widgets/streak_summary_card.dart';
@@ -146,6 +147,7 @@ class DailyScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+                const Center(child: AdBannerWidget()),
                 const BottomNavBar(activeTab: HomeTab.daily),
               ],
             ),
@@ -291,15 +293,9 @@ class _BoardCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     _BoardStatRow(
-                      icon: Icons.auto_awesome_rounded,
-                      label: 'Power-ups',
-                      value: difficulty.powerUpsEnabled ? 'On' : 'Off',
-                    ),
-                    const SizedBox(height: 8),
-                    _BoardStatRow(
                       icon: Icons.timer_outlined,
                       label: 'Time limit',
-                      value: '${dailyRushDuration.inSeconds}s',
+                      value: '${difficulty.rushDuration.inSeconds}s',
                     ),
                   ],
                 ),

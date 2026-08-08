@@ -32,7 +32,7 @@ class NumberamaGame extends FlameGame {
         autoRowIntervalSeconds =
             autoRowIntervalSeconds ?? difficulty.autoRowIntervalSeconds,
         initialRows = difficulty.initialRows,
-        rushDuration = rushDuration ?? dailyRushDuration,
+        rushDuration = rushDuration ?? difficulty.rushDuration,
         selectionManager = SelectionManager(
           gameStateNotifier: gameStateNotifier,
           isDaily: isDaily,
@@ -73,37 +73,14 @@ class NumberamaGame extends FlameGame {
   final double autoRowIntervalSeconds;
 
   /// Daily Challenge Rush only - how long the countdown starts at. Defaults
-  /// to [dailyRushDuration]; overridable (tests only; the app always uses
-  /// the default).
+  /// to [Difficulty.rushDuration]; overridable (tests only; the app always
+  /// uses the default).
   final Duration rushDuration;
 
   /// Daily Challenge Rush only - seconds left on the countdown, ticked down
   /// once a second by [_tickRushCountdown]. Mirrored into
   /// [GameStateNotifier.rushSecondsRemaining] for the HUD.
   int _rushSecondsRemaining = 0;
-
-  /// Seconds left on Rush's numeric countdown that counts as "close
-  /// enough" to play [AudioService.playFinalCountdown].
-  static const _rushFinalCountdownThreshold = 5;
-
-  /// Classic only - seconds left before the next auto-row tick (once the
-  /// stack is already stuck, so that tick is the one that ends the round)
-  /// that counts as "close enough" to play [AudioService.playFinalCountdown].
-  static const _classicFinalCountdownThreshold = 4;
-
-  /// Classic only - the row-rising timer, kept as a field (rather than a
-  /// fire-and-forget `add(TimerComponent(...))` like Rush's countdown) so
-  /// [update] can read its [TimerComponent.timer] progress every frame to
-  /// know how close the *next* tick is, without a second independent
-  /// ticker to keep in sync with it.
-  TimerComponent? _autoRowTimer;
-
-  /// Classic only - guards [AudioService.playFinalCountdown] to fire once
-  /// per close call, not every frame the stack stays stuck inside the
-  /// threshold window. Resets the moment the stack has room again, so a
-  /// second stuck stretch later in the same round still gets its own
-  /// warning.
-  bool _finalCountdownPlayed = false;
 
   /// Constructed eagerly (not in [onLoad]) so UI code can read
   /// [SelectionManager.selectedTilesListenable] synchronously right after
@@ -153,7 +130,6 @@ class NumberamaGame extends FlameGame {
       );
 
       gameStateNotifier.startGame(
-        powerUpsEnabled: difficulty.powerUpsEnabled,
         // Ad-gated from the first frame - see GameStateNotifier.startGame.
         clearRowAvailable: false,
         rushSecondsRemaining: _rushSecondsRemaining,
@@ -165,53 +141,36 @@ class NumberamaGame extends FlameGame {
       gridComponent.addRow(animate: false);
     }
 
-    _autoRowTimer = TimerComponent(
-      period: autoRowIntervalSeconds,
-      repeat: true,
-      onTick: _autoAddRow,
+    add(
+      TimerComponent(
+        period: autoRowIntervalSeconds,
+        repeat: true,
+        onTick: _autoAddRow,
+      ),
     );
-    add(_autoRowTimer!);
 
-    gameStateNotifier.startGame(
-      powerUpsEnabled: difficulty.powerUpsEnabled,
-      clearRowAvailable: difficulty.powerUpsEnabled,
-    );
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    // Classic only - Rush has its own explicit numeric countdown, handled
-    // in _tickRushCountdown instead.
-    if (isDaily || !isLoaded) return;
-    if (gameStateNotifier.phase != GamePhase.playing) return;
-
-    if (gridComponent.canAddRow) {
-      // Room again (a pair cleared since the stack was last full) - the
-      // next stuck stretch this round should get its own warning.
-      _finalCountdownPlayed = false;
-      return;
-    }
-    if (_finalCountdownPlayed) return;
-
-    final timer = _autoRowTimer!.timer;
-    final secondsUntilNextTick = timer.limit - timer.current;
-    if (secondsUntilNextTick <= _classicFinalCountdownThreshold) {
-      _finalCountdownPlayed = true;
-      AudioService.instance.playFinalCountdown();
-    }
+    gameStateNotifier.startGame();
   }
 
   /// Fires every [autoRowIntervalSeconds]. If there's still room, a new row
   /// rises from the bottom; if not, the stack has nowhere left to go but
   /// through the rectangle's top edge, so the round ends right here rather
-  /// than silently doing nothing. Classic only - [isDaily] uses
-  /// [_tickRushCountdown] instead.
+  /// than silently doing nothing. Also ends the round immediately - not on
+  /// the *next* tick, [autoRowIntervalSeconds] later - the moment the row
+  /// just added is the one that fills the board: without this second check,
+  /// the stack visibly hits the rectangle's top edge but the round would
+  /// keep running, unresponsive, until the following tick confirmed there
+  /// was no room left. Classic only - [isDaily] uses [_tickRushCountdown]
+  /// instead.
   void _autoAddRow() {
     if (gameStateNotifier.phase != GamePhase.playing) return;
-    if (gridComponent.canAddRow) {
-      gridComponent.addRow();
-    } else {
+    if (!gridComponent.canAddRow) {
+      AudioService.instance.playGameOver();
+      gameStateNotifier.setPhase(GamePhase.lost);
+      return;
+    }
+    gridComponent.addRow();
+    if (!gridComponent.canAddRow) {
       AudioService.instance.playGameOver();
       gameStateNotifier.setPhase(GamePhase.lost);
     }
@@ -225,9 +184,6 @@ class NumberamaGame extends FlameGame {
     if (gameStateNotifier.phase != GamePhase.playing) return;
     _rushSecondsRemaining--;
     gameStateNotifier.setRushSecondsRemaining(_rushSecondsRemaining);
-    if (_rushSecondsRemaining == _rushFinalCountdownThreshold) {
-      AudioService.instance.playFinalCountdown();
-    }
     if (_rushSecondsRemaining <= 0) {
       AudioService.instance.playGameOver();
       gameStateNotifier.setPhase(

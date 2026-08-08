@@ -5,6 +5,7 @@ import '../../services/rate_service.dart';
 import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ad_banner_widget.dart';
 import '../../widgets/dialog_card.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
@@ -165,6 +166,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                 ),
+                const Center(child: AdBannerWidget()),
                 const BottomNavBar(),
               ],
             ),
