@@ -77,17 +77,11 @@ enum Difficulty {
         Difficulty.hard => 0.75,
       };
 
-  /// Daily Rush only: how long the countdown starts at - the one clock that
-  /// mode has, so it's the direct lever on pressure there, the same role
-  /// [autoRowIntervalSeconds] plays in Classic. Shorter on [hard] (less time
-  /// to work with, on top of [rushPairDistanceRange]'s far-apart pairs and
-  /// [rushSumPairChance]'s harder mental math already making each pair
-  /// slower to find).
-  Duration get rushDuration => switch (this) {
-        Difficulty.easy => const Duration(seconds: 15),
-        Difficulty.medium => const Duration(seconds: 12),
-        Difficulty.hard => const Duration(seconds: 10),
-      };
+  /// Daily Rush only: how long the countdown starts at. Fixed at 60 seconds
+  /// for every tier - pressure on [hard] instead comes from
+  /// [rushPairDistanceRange]'s far-apart pairs and [rushSumPairChance]'s
+  /// harder mental math already making each pair slower to find.
+  Duration get rushDuration => const Duration(seconds: 60);
 
   /// Deterministic difficulty-of-the-day: every player sees the same tier
   /// on the same calendar date (in that date's local calendar day, not

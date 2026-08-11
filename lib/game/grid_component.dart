@@ -69,6 +69,16 @@ class GridComponent extends PositionComponent with HasGameReference {
   /// exactly the same rectangle, this one just also clips.
   late final ClipComponent _tileLayer;
 
+  /// Canvas size [_recalculateMetrics] last computed [position] against.
+  /// Compared every frame in [update] as a self-healing check: if
+  /// [onGameResize] ever fires with (or [game.size] otherwise drifts to) a
+  /// stale/transient size - e.g. a size reported mid-transition during a
+  /// keyboard show/hide, orientation change, or split-screen resize, with no
+  /// further "settled" resize following it - the grid would otherwise stay
+  /// centered against the wrong width indefinitely, since nothing else ever
+  /// re-verifies it.
+  Vector2? _lastMetricsSize;
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
@@ -84,6 +94,21 @@ class GridComponent extends PositionComponent with HasGameReference {
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
     if (!isLoaded) return;
+    // A size reported mid-layout-transition (rather than the final settled
+    // one) is degenerate on at least one axis - skip it rather than
+    // centering against it, so a bogus intermediate frame can't leave the
+    // grid stranded off-center; [update] will catch the eventual real size.
+    if (size.x <= 0 || size.y <= 0) return;
+    _recalculateMetrics();
+    _applyLayout(animate: false);
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!isLoaded) return;
+    if (game.size.x <= 0 || game.size.y <= 0) return;
+    if (game.size == _lastMetricsSize) return;
     _recalculateMetrics();
     _applyLayout(animate: false);
   }
@@ -97,6 +122,7 @@ class GridComponent extends PositionComponent with HasGameReference {
   /// since it represents the fixed play-field boundary, not the current
   /// stack height.
   void _recalculateMetrics() {
+    _lastMetricsSize = game.size.clone();
     _cellSize = min(game.size.x / columns, game.size.y / maxRows);
     _tileSize = _cellSize * (1 - _paddingFactor);
     final boardWidth = columns * _cellSize;
