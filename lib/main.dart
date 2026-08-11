@@ -13,17 +13,6 @@ import 'ui/home/home_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // Deferred to after the first frame renders, not kicked off here - the
-  // Mobile Ads SDK's own native init plus the UMP consent round-trip are
-  // real, sometimes-slow work (network-bound), and none of it gates
-  // anything the app needs to show its first screen. Starting it only once
-  // the player can already see and interact with Home keeps that init
-  // from competing with Firebase/Hive/notifications for the same startup
-  // window - every ad call site already tolerates "not ready yet" (see
-  // AdService.isInterstitialReady/isRewardedReady, and AdBannerWidget
-  // rendering nothing until its ad actually loads), so nothing is lost by
-  // the banner/interstitial/rewarded ads simply becoming ready a little
-  // later than before.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     AdService.instance.initialize();
   });
