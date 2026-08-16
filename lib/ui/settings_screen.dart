@@ -27,7 +27,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
   static const _supportEmail = 'adromagames@gmail.com';
 
   static const _privacyPolicyUrl =
-      'https://himanshugupta0007.github.io/adroma-game-policies/';
+      'https://www.adromagames.com/privacy-policy/';
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
