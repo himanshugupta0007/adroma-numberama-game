@@ -57,7 +57,7 @@ class GridComponent extends PositionComponent with HasGameReference {
   final List<List<TileComponent?>> _grid = [];
 
   /// Tracks the [MoveEffect] each tile's most recent [_applyLayout] pass
-    /// queued, if it hasn't finished (or been superseded) yet. Needed because
+  /// queued, if it hasn't finished (or been superseded) yet. Needed because
   /// `tile.children.whereType<MoveEffect>()` - the check just below that
   /// cancels a *stale* effect before queuing a new one - can't see an effect
   /// added moments ago in the same synchronous call chain: Flame defers
