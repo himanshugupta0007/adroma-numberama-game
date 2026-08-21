@@ -219,6 +219,62 @@ void main() {
   );
 
   testWithGame<NumberamaGame>(
+    'rapid matches interleaved with addRow(), with no settle in between, '
+    'never leave two tiles sharing a slot or bleeding off the board edge',
+    () => NumberamaGame(
+        gameStateNotifier: GameStateNotifier(),
+        random: Random(7),
+        autoRowIntervalSeconds: _noAutoRows),
+    (game) async {
+      await game.ready();
+
+      // Regression check: addRow() can call _applyLayout twice back-to-back
+      // (topping up a short bottom row, then appending a genuinely new one)
+      // with no frame tick in between - and a match's own removePair()/
+      // _collapse() can land in that same window too. MoveEffect.to is
+      // additive, not an override (see its own doc), so two uncancelled
+      // layout moves queued for the same tile in that window used to sum
+      // both offsets once they mounted, instead of the later one simply
+      // winning - visible as two tiles landing on the same slot, or one
+      // sliding past the board's left edge.
+      final rand = Random(42);
+      for (var step = 0; step < 60; step++) {
+        // A tiny, sub-animation tick - a fast player/combo streak leaves
+        // little real time between one tap and the next.
+        game.update(0.03);
+        await game.ready();
+
+        final pair = _findValidPair(game.gridComponent.activeTiles);
+        if (pair != null) {
+          game.selectionManager.onTileTapped(pair[0]);
+          game.selectionManager.onTileTapped(pair[1]);
+        }
+        // Occasionally interleave a row-add mid-animation, like the
+        // auto-row timer firing mid-combo.
+        if (rand.nextBool() && game.gridComponent.canAddRow) {
+          game.gridComponent.addRow();
+        }
+
+        // One real frame tick - same as always separates one input from
+        // the next in actual play - to flush whatever Flame queued via
+        // add() a moment ago.
+        game.update(1 / 60);
+        await game.ready();
+
+        final seenPositions = <String>{};
+        for (final tile in game.gridComponent.activeTiles) {
+          final key = '${tile.position.x.toStringAsFixed(1)},'
+              '${tile.position.y.toStringAsFixed(1)}';
+          expect(seenPositions.add(key), isTrue,
+              reason: 'two tiles overlapped at step $step, position $key');
+          expect(tile.position.x, greaterThanOrEqualTo(-0.5),
+              reason: 'tile bled past the left board edge at step $step');
+        }
+      }
+    },
+  );
+
+  testWithGame<NumberamaGame>(
     'clearing the whole board sets phase to won',
     () => NumberamaGame(
         gameStateNotifier: GameStateNotifier(),

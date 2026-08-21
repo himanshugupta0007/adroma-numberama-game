@@ -56,6 +56,24 @@ class GridComponent extends PositionComponent with HasGameReference {
   /// hasn't been collapsed away yet.
   final List<List<TileComponent?>> _grid = [];
 
+  /// Tracks the [MoveEffect] each tile's most recent [_applyLayout] pass
+    /// queued, if it hasn't finished (or been superseded) yet. Needed because
+  /// `tile.children.whereType<MoveEffect>()` - the check just below that
+  /// cancels a *stale* effect before queuing a new one - can't see an effect
+  /// added moments ago in the same synchronous call chain: Flame defers
+  /// `add()`/`removeFromParent()` to the next lifecycle flush, so it isn't
+  /// in `children` yet. That matters here because `addRow()` can call
+  /// [_applyLayout] twice back-to-back with no frame tick in between
+  /// (topping up the bottom row, then appending a genuinely new one), and
+  /// [MoveEffect.to] is *additive*, not a plain override - per its own
+  /// doc, two live `MoveToEffect`s on the same target sum both of their
+  /// offsets instead of the second simply winning. Without this map, a
+  /// tile could end up with two uncancelled layout moves that both mount
+  /// next frame and add together, overshooting its real target - visibly,
+  /// a tile sliding past its neighbor's slot or bleeding off the board
+  /// edge instead of landing where every other tile agrees it should.
+  final Map<TileComponent, MoveEffect> _pendingLayoutMoves = {};
+
   late double _cellSize;
   late double _tileSize;
 
@@ -167,36 +185,56 @@ class GridComponent extends PositionComponent with HasGameReference {
         // active tile's size here too, not just its position.
         if (tile.size.x != _tileSize) tile.size = Vector2.all(_tileSize);
         final target = _positionForCell(row, col, totalRows: totalRows);
+
+        // A previous layout pass in this same synchronous call chain (e.g.
+        // addRow() topping up the bottom row, then appending a genuinely
+        // new one right after, with no frame tick between) may have queued
+        // a MoveEffect for this tile that hasn't mounted yet - Flame defers
+        // add()/removeFromParent() to the next lifecycle flush, so the
+        // children scan below can't see it. [MoveEffect.to] is additive,
+        // not an override (see its own doc), so leaving that effect in
+        // place would sum both its offset and the new one once both
+        // eventually mount, overshooting the real target - visibly, a tile
+        // sliding past its neighbor's slot or bleeding off the board edge.
+        // Tracked separately from `children` specifically to survive that
+        // blind spot.
+        final stalePending = _pendingLayoutMoves.remove(tile);
+        if (stalePending != null) {
+          stalePending.onComplete?.call();
+          stalePending.removeFromParent();
+        }
+
         if (tile.position == target) continue;
-        // A previous layout pass (e.g. an earlier addRow() called in the
-        // same synchronous batch, before either had a chance to tick) may
-        // have left a MoveEffect for this tile still queued but not yet
-        // started. Without clearing it first, both effects would fight
-        // over the same tile's position once ticking begins - visible as
-        // rows snapping to the wrong slot or briefly overlapping.
+        // A previous layout pass from an earlier, already-settled frame -
+        // or any other MoveEffect, e.g. an in-flight *shake* (see
+        // TileComponent.playShakeAnimation) - may still be live and found
+        // here since it had time to actually mount. Without clearing it
+        // first, both effects would fight over the same tile's position
+        // once ticking begins - visible as rows snapping to the wrong slot
+        // or briefly overlapping.
         //
-        // This can also interrupt a tile's in-flight *shake* (see
-        // TileComponent.playShakeAnimation, also a MoveEffect) - e.g. the
-        // auto-row timer fires while an invalid pair is still mid-shake.
-        // Flame only calls an effect's onComplete from its own update() on
-        // natural completion, never from a forced removeFromParent(), so
-        // silently dropping it here would strand whatever that callback was
-        // guarding - the shake's onComplete is what resets the tile back to
-        // idle and tells SelectionManager to release its selection, so
+        // Interrupting a shake this way matters: the auto-row timer can
+        // fire while an invalid pair is still mid-shake. Flame only calls
+        // an effect's onComplete from its own update() on natural
+        // completion, never from a forced removeFromParent(), so silently
+        // dropping it here would strand whatever that callback was
+        // guarding - the shake's onComplete is what resets the tile back
+        // to idle and tells SelectionManager to release its selection, so
         // skipping it leaves both tiles selected-but-unresettable and the
-        // board permanently unresponsive to taps. Fire it manually first so
-        // interrupting the effect still lets its callback run.
+        // board permanently unresponsive to taps. Fire it manually first
+        // so interrupting the effect still lets its callback run.
         tile.children.whereType<MoveEffect>().toList().forEach((effect) {
           effect.onComplete?.call();
           effect.removeFromParent();
         });
         if (animate) {
-          tile.add(
-            MoveEffect.to(
-              target,
-              EffectController(duration: 0.25, curve: Curves.easeOut),
-            ),
+          final effect = MoveEffect.to(
+            target,
+            EffectController(duration: 0.25, curve: Curves.easeOut),
+            onComplete: () => _pendingLayoutMoves.remove(tile),
           );
+          _pendingLayoutMoves[tile] = effect;
+          tile.add(effect);
         } else {
           tile.position = target;
         }
