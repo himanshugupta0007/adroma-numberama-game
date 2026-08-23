@@ -1,5 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'achievement_queue.dart';
+import 'difficulty.dart';
+import 'level_calculator.dart';
+import 'preferences_service.dart';
+
 /// High-level lifecycle of a single game session.
 enum GamePhase { idle, playing, won, lost }
 
@@ -21,11 +26,19 @@ class GameState {
     this.rushSecondsRemaining,
     this.startedAt,
     this.attemptHistory = const [],
+    this.difficulty,
   });
 
   final int score;
   final int moves;
   final GamePhase phase;
+
+  /// The tier this round is playing at, or `null` for the Daily Challenge -
+  /// which has its own difficulty-of-the-day (see [Difficulty.forDate]) but
+  /// must never feed XP/leveling (see [GameStateNotifier.registerPairCleared]).
+  /// `null` here is exactly what gates that off, rather than a separate
+  /// "isDaily" flag duplicating [SelectionManager.isDaily].
+  final Difficulty? difficulty;
 
   /// Wall-clock moment [GameStateNotifier.startGame] was called - `null`
   /// only before the very first round starts. The results screen reads
@@ -89,6 +102,7 @@ class GameState {
     int? rushSecondsRemaining,
     DateTime? startedAt,
     List<bool>? attemptHistory,
+    Difficulty? difficulty,
   }) {
     return GameState(
       score: score ?? this.score,
@@ -103,16 +117,32 @@ class GameState {
       rushSecondsRemaining: rushSecondsRemaining ?? this.rushSecondsRemaining,
       startedAt: startedAt ?? this.startedAt,
       attemptHistory: attemptHistory ?? this.attemptHistory,
+      difficulty: difficulty ?? this.difficulty,
     );
   }
 
   @override
   String toString() =>
-      'GameState(score: $score, moves: $moves, phase: $phase, combo: $combo, bestCombo: $bestCombo, shuffleAvailable: $shuffleAvailable, hintAvailable: $hintAvailable, clearRowAvailable: $clearRowAvailable, consecutiveMisses: $consecutiveMisses, rushSecondsRemaining: $rushSecondsRemaining, startedAt: $startedAt, attemptHistory: $attemptHistory)';
+      'GameState(score: $score, moves: $moves, phase: $phase, combo: $combo, bestCombo: $bestCombo, shuffleAvailable: $shuffleAvailable, hintAvailable: $hintAvailable, clearRowAvailable: $clearRowAvailable, consecutiveMisses: $consecutiveMisses, rushSecondsRemaining: $rushSecondsRemaining, startedAt: $startedAt, attemptHistory: $attemptHistory, difficulty: $difficulty)';
 }
 
 class GameStateNotifier extends StateNotifier<GameState> {
-  GameStateNotifier() : super(const GameState());
+  /// [ref] is nullable so tests exercising this class (or [NumberamaGame])
+  /// on its own, with no Riverpod [ProviderScope] in the tree at all, can
+  /// keep constructing this with no arguments - XP/achievement side effects
+  /// in [registerPairCleared] just no-op without it. The app itself always
+  /// supplies one, via [gameStateProvider] below.
+  GameStateNotifier([this._ref]) : super(const GameState());
+
+  final Ref? _ref;
+
+  /// Placeholder XP awarded per Classic pair, before [xpForPair]'s
+  /// difficulty multiplier.
+  ///
+  /// TODO(progression): placeholder - tune against real scoring data before
+  /// launch (see level_calculator.dart's firstLevelXpIncrement/
+  /// xpGrowthRate TODOs).
+  static const int _baseXpPerPair = 10;
 
   /// Public read of the current phase - `state` itself is `@protected` on
   /// [StateNotifier], so code outside this class (e.g. [NumberamaGame]'s
@@ -142,10 +172,15 @@ class GameStateNotifier extends StateNotifier<GameState> {
   /// Challenge always passes `false` - clearing a row there is ad-gated
   /// from the very first frame, with no free use at all, regardless of
   /// tier.
+  ///
+  /// [difficulty] is the tier this round awards XP at - pass `null` for the
+  /// Daily Challenge (which must never affect XP/level, regardless of its
+  /// own difficulty-of-the-day) and the player's chosen tier for Classic.
   void startGame({
     bool powerUpsEnabled = true,
     bool clearRowAvailable = true,
     int? rushSecondsRemaining,
+    Difficulty? difficulty,
   }) {
     state = GameState(
       phase: GamePhase.playing,
@@ -154,6 +189,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
       clearRowAvailable: clearRowAvailable,
       rushSecondsRemaining: rushSecondsRemaining,
       startedAt: DateTime.now(),
+      difficulty: difficulty,
     );
   }
 
@@ -184,6 +220,37 @@ class GameStateNotifier extends StateNotifier<GameState> {
       consecutiveMisses: 0,
       attemptHistory: [...state.attemptHistory, true],
     );
+    _awardXpIfClassic();
+  }
+
+  /// Awards XP for the pair just cleared and enqueues a level-up
+  /// celebration if it crossed a threshold - Classic rounds only.
+  /// [GameState.difficulty] is `null` for the Daily Challenge, which must
+  /// never touch XP/level at all (see that field's doc), and this also
+  /// no-ops with no [_ref] (see constructor doc - test-only).
+  void _awardXpIfClassic() {
+    final difficulty = state.difficulty;
+    final ref = _ref;
+    if (difficulty == null || ref == null) return;
+
+    final prefs = ref.read(preferencesServiceProvider);
+    final oldXp = prefs.totalXp;
+    final oldLevel = calculateLevel(oldXp);
+    final newXp = oldXp + xpForPair(baseXp: _baseXpPerPair, difficulty: difficulty);
+    prefs.setTotalXp(newXp);
+    final newLevel = calculateLevel(newXp);
+
+    if (newLevel > oldLevel) {
+      ref.read(achievementQueueProvider.notifier).enqueue(
+            AchievementEvent(
+              title: 'Level $newLevel!',
+              // TODO(progression): placeholder icon/sound - swap for real
+              // assets before launch.
+              iconAsset: 'assets/images/level_up.png',
+              soundAsset: 'sounds/level-up.mp3',
+            ),
+          );
+    }
   }
 
   /// Breaks the current streak - called whenever an invalid pair is tapped.
@@ -239,5 +306,5 @@ class GameStateNotifier extends StateNotifier<GameState> {
 }
 
 final gameStateProvider = StateNotifierProvider<GameStateNotifier, GameState>(
-  (ref) => GameStateNotifier(),
+  (ref) => GameStateNotifier(ref),
 );

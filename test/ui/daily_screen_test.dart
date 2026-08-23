@@ -58,6 +58,10 @@ Future<ProviderContainer> _bootApp(
       '${now.year}-${now.month.toString().padLeft(2, '0')}-'
       '${now.day.toString().padLeft(2, '0')}',
     );
+    // The actual replay gate is the current 10-hour cycle (see
+    // PreferencesService.hasPlayedCurrentDailyCycle), not the calendar-day
+    // key above (which only feeds the streak).
+    await box.put('last_daily_played_cycle', dailyCycleIndex(now));
   }
 
   final container = ProviderContainer(
@@ -107,11 +111,11 @@ void main() {
 
     expect(find.widgetWithText(GradientButton, "Start today's board"),
         findsNothing);
-    expect(find.textContaining('come back tomorrow'), findsOneWidget);
+    expect(find.textContaining('come back in'), findsOneWidget);
   });
 
   testWidgets(
-      'finishing today\'s daily round locks it for the rest of the day',
+      "finishing today's daily round locks it for the rest of the cycle",
       (tester) async {
     await _bootApp(tester);
     await _openDaily(tester);
@@ -148,6 +152,6 @@ void main() {
     expect(find.byType(DailyScreen), findsOneWidget);
     expect(find.widgetWithText(GradientButton, "Start today's board"),
         findsNothing);
-    expect(find.textContaining('come back tomorrow'), findsOneWidget);
+    expect(find.textContaining('come back in'), findsOneWidget);
   });
 }

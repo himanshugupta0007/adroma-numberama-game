@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/rate_service.dart';
+import '../../state/level_calculator.dart';
 import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -122,6 +123,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: SingleChildScrollView(
                       child: Column(
                         children: [
+                          // Hidden for a player who has never finished a
+                          // Classic round - everyone is technically "Level
+                          // 1" from totalXp == 0, so that (not a level
+                          // number) is what gates first-time visibility.
+                          // The Daily Challenge never contributes XP (see
+                          // GameState.difficulty's doc), so this reflects
+                          // Classic progress only. Shown above the score
+                          // section - progression is the more prominent,
+                          // ever-climbing number, so it leads.
+                          if (prefs.totalXp > 0) ...[
+                            _LevelBadge(level: calculateLevel(prefs.totalXp)),
+                            const SizedBox(height: 18),
+                          ],
                           Row(
                             children: [
                               Expanded(
@@ -236,6 +250,44 @@ class _BestEverCard extends StatelessWidget {
             ],
           ),
           Text('$score',
+              style: AppTextStyles.mono(22, color: AppColors.textHi)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Level strip above the score section - Classic progress only, see this
+/// file's call site for why it's hidden for first-time players. Same
+/// padding/icon/font sizes as [_BestEverCard] on purpose, so the two cards
+/// read as the same size/weight rather than one looking like an afterthought.
+class _LevelBadge extends StatelessWidget {
+  const _LevelBadge({required this.level});
+
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.amber.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.military_tech_rounded,
+                  color: AppColors.amber, size: 20),
+              const SizedBox(width: 10),
+              Text('LEVEL', style: AppTextStyles.caption),
+            ],
+          ),
+          Text('$level',
               style: AppTextStyles.mono(22, color: AppColors.textHi)),
         ],
       ),

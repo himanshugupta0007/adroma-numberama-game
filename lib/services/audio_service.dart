@@ -52,6 +52,22 @@ class AudioService {
   /// loss.
   void playGameOver() => _play(_gameOverPlayer, _gameOverClip);
 
+  /// One dedicated player per fixed clip above avoids two overlapping SFX
+  /// cutting each other off; a dynamic one-off (achievement toasts today,
+  /// reused for badges later - see `AchievementEvent.soundAsset`) has no
+  /// fixed clip to dedicate a player to, so it gets a fresh one per call
+  /// instead. These fire rarely enough (level-ups, badge unlocks) that
+  /// overlap with each other is a non-issue in practice.
+  void playOneOff(String assetPath) {
+    if (!_enabled) return;
+    final player = AudioPlayer();
+    unawaited(
+      player.play(AssetSource(assetPath)).catchError((_) {}).whenComplete(
+            player.dispose,
+          ),
+    );
+  }
+
   void _play(AudioPlayer player, Source clip) {
     if (!_enabled) return;
     // Never let an audio backend hiccup (a platform channel error, a

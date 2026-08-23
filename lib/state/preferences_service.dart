@@ -1,5 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
+import 'package:uuid/uuid.dart';
+
+import 'difficulty.dart';
+import 'player_progress.dart';
 
 /// The real Hive box backing every durable value this app keeps locally -
 /// opened once in `main()` (before [ProviderScope] is even built) and
@@ -78,6 +82,7 @@ class PreferencesService {
   static const _yearBestScorePeriodKey = 'year_best_score_period';
   static const _lastDailyPlayedDateKey = 'last_daily_played_date';
   static const _dailyPlayedHistoryKey = 'daily_played_history';
+  static const _lastDailyPlayedCycleKey = 'last_daily_played_cycle';
   static const _currentStreakKey = 'current_streak';
   static const _classicRoundsPlayedKey = 'classic_rounds_played';
   static const _soundEnabledKey = 'sound_enabled';
@@ -88,6 +93,8 @@ class PreferencesService {
   static const _hasRatedKey = 'has_rated';
   static const _lastRatePromptDateKey = 'last_rate_prompt_date';
   static const _removeAdsPurchasedKey = 'remove_ads_purchased';
+  static const _playerIdKey = 'player_id';
+  static const _totalXpKey = 'total_xp';
 
   /// Whether the one-time "How to Play" dialog has already been shown.
   bool get hasSeenHowToPlay =>
@@ -170,27 +177,59 @@ class PreferencesService {
   }
 
   /// Whether the Daily Challenge board for [date]'s calendar day has
-  /// already been played - win or loss both count, there's only one
-  /// attempt per day, Wordle-style.
+  /// already been played - win or loss both count. Superseded as the
+  /// player-facing replay gate by [hasPlayedCurrentDailyCycle] (the board
+  /// now resets every [dailyCycleDuration], not once per calendar day);
+  /// this stays purely as an input to the calendar-day [currentStreak] via
+  /// [registerDailyPlayed].
   bool hasPlayedDailyOn(DateTime date) =>
       _box.get(_lastDailyPlayedDateKey) == _dateKey(date);
+
+  /// Whether the Daily Challenge board for [time]'s [dailyCycleIndex] has
+  /// already been played - win or loss both count, there's only one
+  /// attempt per cycle, Wordle-style. This is the actual replay gate the
+  /// Daily screen shows/hides its start button on; [currentStreak] stays
+  /// calendar-day based (see [registerDailyPlayed]) and is unaffected by
+  /// how many cycles land within one day.
+  bool hasPlayedCurrentDailyCycle(DateTime time) =>
+      _box.get(_lastDailyPlayedCycleKey) == dailyCycleIndex(time);
+
+  /// Records [time]'s cycle as played, so [hasPlayedCurrentDailyCycle]
+  /// locks out a retry until the next cycle unlocks.
+  void registerDailyCyclePlayed(DateTime time) =>
+      _box.put(_lastDailyPlayedCycleKey, dailyCycleIndex(time));
+
+  /// How long until [hasPlayedCurrentDailyCycle] unlocks again for [time],
+  /// or [Duration.zero] if it's already unlocked (no round played this
+  /// cycle, or none ever played).
+  Duration timeUntilNextDailyCycle(DateTime time) {
+    final lastCycle = _box.get(_lastDailyPlayedCycleKey) as int?;
+    if (lastCycle == null || lastCycle != dailyCycleIndex(time)) {
+      return Duration.zero;
+    }
+    final remaining = dailyCycleUnlockTime(lastCycle).difference(time);
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
 
   List<String> get _dailyPlayedHistory =>
       (_box.get(_dailyPlayedHistoryKey) as List?)?.cast<String>() ?? const [];
 
   /// Whether [date]'s calendar day has ever been played, per full history -
-  /// unlike [hasPlayedDailyOn] (which only gates *today's* one attempt),
-  /// this is what the calendar strip's per-day checkmarks are driven from.
+  /// this is what the calendar strip's per-day checkmarks are driven from
+  /// (the replay gate itself is [hasPlayedCurrentDailyCycle]).
   bool hasEverPlayedDailyOn(DateTime date) =>
       _dailyPlayedHistory.contains(_dateKey(date));
 
   /// Consecutive calendar days the Daily Challenge has been played, `0` if
-  /// none yet. Win or loss both keep it alive, matching [hasPlayedDailyOn]
-  /// - it's a "showed up" streak, not a "won" streak.
+  /// none yet. Win or loss both keep it alive - it's a "showed up" streak,
+  /// not a "won" streak. Deliberately still calendar-day based (not
+  /// [dailyCycleIndex] based) even though the replay gate itself
+  /// ([hasPlayedCurrentDailyCycle]) is - showing up once anywhere in a
+  /// calendar day keeps the streak alive, however many cycles land in it.
   int get currentStreak => (_box.get(_currentStreakKey) as int?) ?? 0;
 
   /// Records [date]'s calendar day as the daily round just played, so
-  /// [hasPlayedDailyOn] locks out a retry for the rest of that day, and
+  /// [hasPlayedDailyOn] reflects it for the rest of that day, and
   /// updates [currentStreak]: incremented if [date] is the calendar day
   /// right after the last played date, restarted at 1 if a day was
   /// skipped (or this is the first daily round ever). A repeat call for a
@@ -330,10 +369,44 @@ class PreferencesService {
   Future<void> setRemoveAdsPurchased(bool value) =>
       _box.put(_removeAdsPurchasedKey, value);
 
+  /// Stable per-install identifier - generated via [Uuid.v4] the first time
+  /// this is ever read, then persisted so every later read (this launch and
+  /// every future one) returns the same value. This is the app's one seam
+  /// for a future cloud backend (see class doc): the key a player's record
+  /// would be stored under remotely.
+  String get playerId {
+    final existing = _box.get(_playerIdKey) as String?;
+    if (existing != null) return existing;
+    final generated = const Uuid().v4();
+    _box.put(_playerIdKey, generated);
+    return generated;
+  }
+
+  /// All-time XP total earned from Classic rounds - the Daily Challenge
+  /// never contributes (see `GameStateNotifier.registerPairCleared`). `0`
+  /// before the player's first Classic pair. A level is always derived from
+  /// this via `calculateLevel` (`level_calculator.dart`), never stored
+  /// separately - see [PlayerProgress]'s class doc for why.
+  int get totalXp => (_box.get(_totalXpKey) as int?) ?? 0;
+
+  Future<void> setTotalXp(int value) => _box.put(_totalXpKey, value);
+
+  /// Convenience bundle of [playerId] and [totalXp] - see [PlayerProgress].
+  PlayerProgress get playerProgress =>
+      PlayerProgress(playerId: playerId, totalXp: totalXp);
+
   /// Wipes every durable value this app keeps locally - all-time and
   /// period-bucketed best scores, daily-played gate, daily play history,
-  /// streak, Classic round count, the "Rate Numberama" prompt's own
+  /// streak, Classic round count, XP, the "Rate Numberama" prompt's own
   /// tracking, and every setting above - back to first-launch defaults.
   /// Used by Settings' "Reset Progress" action.
-  Future<void> clearAll() => _box.clear();
+  ///
+  /// [playerId] alone survives - it identifies this install for a future
+  /// cloud backend, not in-game progress, so a progress reset shouldn't
+  /// change it.
+  Future<void> clearAll() async {
+    final id = _box.get(_playerIdKey) as String?;
+    await _box.clear();
+    if (id != null) await _box.put(_playerIdKey, id);
+  }
 }

@@ -3,27 +3,24 @@ import 'package:numberama/state/difficulty.dart';
 
 void main() {
   group('Difficulty.forDate', () {
-    test('rotates through every tier across consecutive days', () {
-      // 3 consecutive days must cover all 3 tiers exactly once, whichever
-      // tier the sequence happens to start on - this is the actual product
-      // requirement ("every difficulty level should be different").
-      final start = DateTime.utc(2026, 3, 5);
-      final tiers = [
-        for (var i = 0; i < 3; i++)
-          Difficulty.forDate(start.add(Duration(days: i))),
-      ];
-      expect(tiers.toSet(), Difficulty.values.toSet());
-    });
-
     test('is deterministic - the same date always yields the same tier', () {
       final date = DateTime.utc(2026, 7, 14);
       expect(Difficulty.forDate(date), Difficulty.forDate(date));
     });
 
-    test('only depends on the calendar day, not the time of day', () {
-      final morning = DateTime.utc(2026, 7, 14, 1);
-      final night = DateTime.utc(2026, 7, 14, 23, 59);
-      expect(Difficulty.forDate(morning), Difficulty.forDate(night));
+    test('stays the same within a single 10-hour cycle', () {
+      final start = DateTime.utc(2026, 7, 14);
+      expect(Difficulty.forDate(start),
+          Difficulty.forDate(start.add(const Duration(hours: 9))));
+    });
+
+    test('changes once a 10-hour cycle boundary is crossed', () {
+      final start = DateTime.utc(2026, 7, 14);
+      final tiers = {
+        for (var i = 0; i < 3; i++)
+          Difficulty.forDate(start.add(dailyCycleDuration * i)),
+      };
+      expect(tiers, Difficulty.values.toSet());
     });
   });
 

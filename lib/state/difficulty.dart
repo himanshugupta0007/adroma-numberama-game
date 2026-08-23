@@ -1,7 +1,29 @@
+/// Length of one Daily Challenge cycle - a fresh board unlocks every time
+/// this elapses (see [dailyCycleIndex]), replacing a plain once-per-calendar
+/// day gate so players get more than one shot at a new board across a day.
+const dailyCycleDuration = Duration(hours: 10);
+
+/// Which [dailyCycleDuration]-long cycle [time] falls into, counted from the
+/// Unix epoch - the same cycle for every player on Earth regardless of local
+/// timezone (calendar-day boundaries differ by timezone; epoch-relative
+/// cycles don't), the way a shared daily puzzle needs to be.
+int dailyCycleIndex(DateTime time) =>
+    time.toUtc().millisecondsSinceEpoch ~/ dailyCycleDuration.inMilliseconds;
+
+/// Wall-clock instant [cycle] unlocks at, i.e. when the cycle *after* it
+/// begins - what [PreferencesService.timeUntilNextDailyCycle] counts down
+/// to.
+DateTime dailyCycleUnlockTime(int cycle) =>
+    DateTime.fromMillisecondsSinceEpoch(
+      (cycle + 1) * dailyCycleDuration.inMilliseconds,
+      isUtc: true,
+    ).toLocal();
+
 /// A difficulty tier, chosen by the player before a Classic round (see the
-/// home screen's difficulty picker) or fixed by the calendar date for the
-/// Daily Challenge (see [Difficulty.forDate]), so every player sees the same
-/// Daily tier on the same day, the same way everyone gets the same puzzle.
+/// home screen's difficulty picker) or fixed by the current [dailyCycleIndex]
+/// for the Daily Challenge (see [Difficulty.forDate]), so every player sees
+/// the same Daily tier within the same cycle, the same way everyone gets the
+/// same puzzle.
 ///
 /// The Daily Challenge is a Rush round (see [rushPairDistanceRange]/
 /// [rushSumPairChance]/[rushDuration]), not Classic's rising stack -
@@ -83,32 +105,24 @@ enum Difficulty {
   /// harder mental math already making each pair slower to find.
   Duration get rushDuration => const Duration(seconds: 60);
 
-  /// Deterministic difficulty-of-the-day: every player sees the same tier
-  /// on the same calendar date (in that date's local calendar day, not
-  /// wall-clock time), and it rotates so consecutive days differ.
-  static Difficulty forDate(DateTime date) {
-    final day = DateTime.utc(date.year, date.month, date.day);
-    final yearStart = DateTime.utc(date.year, 1, 1);
-    final dayOfYear = day.difference(yearStart).inDays;
-    return Difficulty.values[dayOfYear % Difficulty.values.length];
-  }
+  /// Deterministic difficulty-of-the-cycle: every player sees the same tier
+  /// within the same [dailyCycleIndex] (wall-clock time, not calendar date),
+  /// and it rotates so consecutive cycles differ.
+  static Difficulty forDate(DateTime date) =>
+      Difficulty.values[dailyCycleIndex(date) % Difficulty.values.length];
 }
 
-/// A per-day identifier shown alongside the daily board (e.g. "SEED #0714"
-/// for July 14th) - and something for the results share card to reference.
-/// A display label only: month+day repeats across years, so it's not
-/// unique the way [dailySeed] needs to be.
+/// A per-cycle identifier shown alongside the daily board (e.g. "SEED
+/// #014522") - and something for the results share card to reference.
+/// Derived straight from [dailyCycleIndex], so - unlike the old per-calendar
+/// day label - it never repeats across two different Daily boards.
 String dailySeedLabel(DateTime date) =>
-    'SEED #${date.month.toString().padLeft(2, '0')}'
-    '${date.day.toString().padLeft(2, '0')}';
+    'SEED #${dailyCycleIndex(date).toString().padLeft(6, '0')}';
 
-/// Deterministic integer seed for [date]'s local calendar day - the same
-/// value for every player regardless of time zone, and different from
-/// every other day (unlike [dailySeedLabel], which repeats across years).
-/// Feeds [NumberamaGame]'s injectable `Random` so the Daily Challenge board
-/// - tile values and pair placement, not just [Difficulty] tier - is the
-/// same for every player, the same way a real shared daily puzzle should be.
-int dailySeed(DateTime date) {
-  final day = DateTime.utc(date.year, date.month, date.day);
-  return day.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
-}
+/// Deterministic integer seed for [date]'s [dailyCycleIndex] - the same
+/// value for every player regardless of time zone, and different from every
+/// other cycle. Feeds [NumberamaGame]'s injectable `Random` so the Daily
+/// Challenge board - tile values and pair placement, not just [Difficulty]
+/// tier - is the same for every player, the same way a real shared daily
+/// puzzle should be.
+int dailySeed(DateTime date) => dailyCycleIndex(date);

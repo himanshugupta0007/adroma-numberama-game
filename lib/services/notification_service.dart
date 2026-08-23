@@ -1,35 +1,33 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
-/// Schedules and cancels Numberama's single local notification - the daily
-/// streak reminder. UI-independent: nothing in here reads `BuildContext` or
-/// Riverpod state, so the Settings screen and the gameplay completion flow
-/// can both call straight into it.
+import '../state/difficulty.dart';
+
+/// Schedules and cancels Numberama's single local notification - the Daily
+/// Challenge "ready" reminder. UI-independent: nothing in here reads
+/// `BuildContext` or Riverpod state, so the Settings screen and the gameplay
+/// completion flow can both call straight into it.
 ///
-/// The reminder is deliberately a one-shot, not an OS-level repeating
-/// notification (`matchDateTimeComponents`) - it's rescheduled for the next
-/// day explicitly, either by [skipTodaysReminder] (today's board already
-/// played) or by the app re-arming it on every launch (see `main.dart`).
-/// That's the only re-arm path this pass has: without a background-execution
-/// package (e.g. `workmanager`, out of scope here), there's no code running
-/// to chain a one-shot into the next day's while the app is fully closed and
-/// its notification simply fires unopened. In practice that's fine - the
-/// player opens the app at least once before the next fire time in the
-/// overwhelming majority of cases, and re-arming on launch covers it.
+/// The reminder is a one-shot, not an OS-level repeating notification
+/// (`matchDateTimeComponents`) - it targets the exact instant the Daily
+/// Challenge's [dailyCycleDuration] cooldown ends (see
+/// [scheduleDailyReadyReminder]), so it's rescheduled explicitly every time
+/// that instant changes: right after a Daily round is played (see
+/// `gameplay_screen.dart`) and by the app re-arming it on every launch (see
+/// `main.dart`), since a scheduled notification isn't guaranteed to survive
+/// an app update/reinstall.
 class NotificationService {
   NotificationService._();
 
   static final NotificationService instance = NotificationService._();
 
   static const _streakReminderId = 1001;
-  static const _defaultReminderTime = TimeOfDay(hour: 20, minute: 0);
-  static const _reminderTitle = "Don't lose your streak!";
+  static const _reminderTitle = 'New Daily Challenge ready!';
   static const _reminderBody =
-      "You haven't played today — keep your streak alive.";
+      'Your next board just unlocked — keep the streak alive.';
 
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
@@ -117,23 +115,30 @@ class NotificationService {
     return true;
   }
 
-  /// Schedules the next occurrence of the streak reminder at [time]
-  /// (today if it hasn't passed yet, otherwise tomorrow). Uses a fixed
-  /// notification id so a repeat call cleanly replaces whatever was
-  /// previously pending rather than stacking a second one.
+  /// Schedules the Daily Challenge "ready" reminder to fire at [unlockAt] -
+  /// normally `lastPlayed + dailyCycleDuration`, i.e. the exact instant the
+  /// next board unlocks (see `gameplay_screen.dart` and `main.dart`, its two
+  /// call sites). Uses a fixed notification id so a repeat call cleanly
+  /// replaces whatever was previously pending rather than stacking a second
+  /// one. A past [unlockAt] (e.g. the app was closed well past the last
+  /// cycle's unlock) is clamped to fire immediately rather than being
+  /// silently dropped.
   ///
   /// `androidScheduleMode: inexactAllowWhileIdle` is deliberate - this
   /// reminder doesn't need to-the-second precision, and inexact mode is the
   /// one that never requires Android's separate exact-alarm permission.
-  Future<void> scheduleStreakReminder({
-    TimeOfDay time = _defaultReminderTime,
-  }) async {
+  Future<void> scheduleDailyReadyReminder(DateTime unlockAt) async {
     await initialize();
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled = tz.TZDateTime.from(unlockAt, tz.local);
+    if (!scheduled.isAfter(now)) {
+      scheduled = now.add(const Duration(seconds: 1));
+    }
     await _plugin.zonedSchedule(
       id: _streakReminderId,
       title: _reminderTitle,
       body: _reminderBody,
-      scheduledDate: _nextInstanceOfTime(time),
+      scheduledDate: scheduled,
       notificationDetails: _notificationDetails,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
@@ -142,59 +147,12 @@ class NotificationService {
   Future<void> cancelStreakReminder() =>
       _plugin.cancel(id: _streakReminderId);
 
-  /// Cancels only the next pending fire and immediately re-schedules the
-  /// following day's, without the user touching the toggle - called when
-  /// the player completes today's Daily Challenge.
-  ///
-  /// If today's reminder time has already passed, whatever is currently
-  /// pending is already tomorrow's occurrence (see [_nextInstanceOfTime]),
-  /// so there's nothing to skip and this is a no-op.
-  Future<void> skipTodaysReminder({
-    TimeOfDay time = _defaultReminderTime,
-  }) async {
-    await initialize();
-    final now = tz.TZDateTime.now(tz.local);
-    final todayAtTime = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      time.hour,
-      time.minute,
-    );
-    if (!todayAtTime.isAfter(now)) return;
-
-    await _plugin.zonedSchedule(
-      id: _streakReminderId,
-      title: _reminderTitle,
-      body: _reminderBody,
-      scheduledDate: todayAtTime.add(const Duration(days: 1)),
-      notificationDetails: _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-    );
-  }
-
-  tz.TZDateTime _nextInstanceOfTime(TimeOfDay time) {
-    final now = tz.TZDateTime.now(tz.local);
-    var scheduled = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      time.hour,
-      time.minute,
-    );
-    if (!scheduled.isAfter(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
-    return scheduled;
-  }
-
   static const _notificationDetails = NotificationDetails(
     android: AndroidNotificationDetails(
       'streak_reminder',
       'Streak Reminders',
-      channelDescription: 'Daily reminder to keep your Numberama streak alive',
+      channelDescription:
+          'Lets you know when your next Daily Challenge board is ready',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
     ),

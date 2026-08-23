@@ -44,7 +44,8 @@ class NumberamaGame extends FlameGame {
   /// (both apply to Classic and Daily), plus - for Classic only - starting
   /// rows and auto-row speed. See [Difficulty]. Classic players pick their
   /// own tier on the home screen's difficulty picker; the Daily Challenge's
-  /// tier is fixed by the calendar date instead (see [Difficulty.forDate]).
+  /// tier is fixed by the current 10-hour cycle instead (see
+  /// [Difficulty.forDate]).
   final Difficulty difficulty;
 
   /// Whether this is the Daily Challenge's Rush mode: a fixed, fully-filled
@@ -133,6 +134,9 @@ class NumberamaGame extends FlameGame {
         // Ad-gated from the first frame - see GameStateNotifier.startGame.
         clearRowAvailable: false,
         rushSecondsRemaining: _rushSecondsRemaining,
+        // The Daily Challenge never awards XP/level, regardless of its own
+        // difficulty-of-the-day - see GameState.difficulty's doc.
+        difficulty: null,
       );
       return;
     }
@@ -149,7 +153,7 @@ class NumberamaGame extends FlameGame {
       ),
     );
 
-    gameStateNotifier.startGame();
+    gameStateNotifier.startGame(difficulty: difficulty);
   }
 
   /// Fires every [autoRowIntervalSeconds]. If there's still room, a new row

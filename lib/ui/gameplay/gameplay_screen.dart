@@ -8,12 +8,14 @@ import '../../services/notification_service.dart';
 import '../../state/difficulty.dart';
 import '../../state/game_mode.dart';
 import '../../state/game_state.dart';
+import '../../state/level_calculator.dart';
 import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/dialog_card.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
+import '../achievement_toast.dart';
 import '../results/results_screen.dart';
 import 'how_to_play_dialog.dart';
 import 'power_bar.dart';
@@ -123,15 +125,21 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
 
     var streakJustExtended = false;
     if (widget.isDaily) {
-      // Win or loss, today's one attempt is spent - there's no board-state
-      // persistence to let a player resume an abandoned round anyway, and
-      // gating on completion (not on tapping "Start") means backing out of
-      // the pre-round dialogs doesn't cost an attempt.
-      streakJustExtended = prefs.registerDailyPlayed(DateTime.now());
-      // Today's board is done either way (win or loss) - don't nag about a
-      // streak the player already kept alive today, but leave tomorrow's
-      // reminder untouched.
-      ref.read(notificationServiceProvider).skipTodaysReminder();
+      // Win or loss, this cycle's one attempt is spent - there's no
+      // board-state persistence to let a player resume an abandoned round
+      // anyway, and gating on completion (not on tapping "Start") means
+      // backing out of the pre-round dialogs doesn't cost an attempt.
+      final now = DateTime.now();
+      streakJustExtended = prefs.registerDailyPlayed(now);
+      prefs.registerDailyCyclePlayed(now);
+      // Re-arm the "ready" reminder for exactly when the next board
+      // unlocks, so it never nags mid-cooldown - only once there's
+      // actually something new to play.
+      if (prefs.dailyReminderEnabled) {
+        ref.read(notificationServiceProvider).scheduleDailyReadyReminder(
+              now.add(dailyCycleDuration),
+            );
+      }
     }
     final dailyStars = widget.isDaily ? _starsForDaily(bestCombo, won: won) : 0;
     // Classic has no daily puzzle index of its own - this stands in for
@@ -235,7 +243,27 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
         if (didPop) return;
         _confirmExit();
       },
-      child: Scaffold(
+      child: Stack(
+        children: [
+          _buildScaffold(context),
+          // Only ever fed events from Classic pairs (see
+          // GameStateNotifier.registerPairCleared) - the Daily Challenge
+          // never enqueues one, but skipping the mount entirely here avoids
+          // even a possible empty-queue widget on that route.
+          if (!widget.isDaily)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(bottom: false, child: AchievementToast()),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
+    return Scaffold(
         body: GraphPaperBackground(
           child: SafeArea(
             child: Padding(
@@ -281,10 +309,10 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 }
+
 
 class _TopBar extends StatelessWidget {
   const _TopBar({
@@ -404,6 +432,16 @@ class _ScoreRow extends ConsumerWidget {
             Text('SCORE', style: AppTextStyles.caption),
           ],
         ),
+        // Daily never awards XP (see GameState.difficulty's doc), so its
+        // level would just sit frozen here - hidden entirely rather than
+        // inviting "why isn't this moving?" on that route. No separate
+        // revision watch needed: XP changes land in the very same
+        // GameStateNotifier write that bumps `score` above, so this already
+        // rebuilds exactly when totalXp does.
+        if (!isDaily)
+          _LevelPill(
+            level: calculateLevel(ref.watch(preferencesServiceProvider).totalXp),
+          ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
@@ -447,6 +485,34 @@ class _ScoreRow extends ConsumerWidget {
     final minutes = clamped ~/ 60;
     final seconds = clamped % 60;
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+}
+
+/// Small "Lv. N" badge next to the score display - reactive to
+/// [PlayerProgress] state only, no local state of its own. Classic only,
+/// see [_ScoreRow]'s call site.
+class _LevelPill extends StatelessWidget {
+  const _LevelPill({required this.level});
+
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: AppColors.amber.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          'Lv. $level',
+          style: AppTextStyles.mono(11, color: AppColors.amber),
+        ),
+      ),
+    );
   }
 }
 

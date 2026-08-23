@@ -51,6 +51,14 @@ class DailyScreen extends ConsumerWidget {
   String _formatDate(DateTime d) =>
       '${_weekdays[d.weekday - 1]}, ${_months[d.month - 1]} ${d.day}';
 
+  /// "6h 42m" for anything an hour or longer, "12m" once it drops below -
+  /// used for the countdown to the next Daily Challenge cycle.
+  static String _formatCountdown(Duration d) {
+    final hours = d.inHours;
+    final minutes = d.inMinutes.remainder(60);
+    return hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m';
+  }
+
   void _openGameplay(BuildContext context, Difficulty difficulty) {
     Navigator.push(
       context,
@@ -76,7 +84,8 @@ class DailyScreen extends ConsumerWidget {
     // isn't enough to pick that up.
     ref.watch(preferencesRevisionProvider);
     final prefs = ref.watch(preferencesServiceProvider);
-    final alreadyPlayed = prefs.hasPlayedDailyOn(now);
+    final alreadyPlayed = prefs.hasPlayedCurrentDailyCycle(now);
+    final nextUnlockIn = prefs.timeUntilNextDailyCycle(now);
 
     return Scaffold(
       body: GraphPaperBackground(
@@ -127,7 +136,7 @@ class DailyScreen extends ConsumerWidget {
                         _BoardCard(difficulty: difficulty, date: now),
                         const SizedBox(height: 20),
                         if (alreadyPlayed)
-                          const _AlreadyPlayedNotice()
+                          _AlreadyPlayedNotice(unlockIn: nextUnlockIn)
                         else
                           GradientButton(
                             label: "Start today's board",
@@ -135,8 +144,11 @@ class DailyScreen extends ConsumerWidget {
                           ),
                         const SizedBox(height: 14),
                         Text(
-                          'New board unlocks at midnight. Miss a day and the '
-                          'streak resets — no undo.',
+                          alreadyPlayed
+                              ? 'Next board unlocks in ${_formatCountdown(nextUnlockIn)}. '
+                                  'Miss a whole day and the streak resets — no undo.'
+                              : 'A new board unlocks every ${dailyCycleDuration.inHours} '
+                                  'hours. Miss a whole day and the streak resets — no undo.',
                           style: AppTextStyles.display(
                             11.5,
                             weight: FontWeight.w400,
@@ -340,10 +352,12 @@ class _BoardStatRow extends StatelessWidget {
   }
 }
 
-/// Shown instead of the start button once today's one attempt is spent -
-/// see [PreferencesService.hasPlayedDailyOn].
+/// Shown instead of the start button once the current cycle's one attempt
+/// is spent - see [PreferencesService.hasPlayedCurrentDailyCycle].
 class _AlreadyPlayedNotice extends StatelessWidget {
-  const _AlreadyPlayedNotice();
+  const _AlreadyPlayedNotice({required this.unlockIn});
+
+  final Duration unlockIn;
 
   @override
   Widget build(BuildContext context) {
@@ -363,7 +377,8 @@ class _AlreadyPlayedNotice extends StatelessWidget {
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              "Today's board complete — come back tomorrow",
+              "Today's board complete — come back in "
+              '${DailyScreen._formatCountdown(unlockIn)}',
               textAlign: TextAlign.center,
               style: AppTextStyles.display(13,
                   weight: FontWeight.w500, color: AppColors.teal),

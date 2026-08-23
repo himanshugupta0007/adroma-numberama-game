@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'firebase_options.dart';
 import 'services/ad_service.dart';
 import 'services/notification_service.dart';
+import 'state/difficulty.dart';
 import 'state/preferences_service.dart';
 import 'theme/app_theme.dart';
 import 'ui/home/home_screen.dart';
@@ -28,11 +29,17 @@ Future<void> main() async {
 
   await NotificationService.instance.initialize();
   // Scheduled notifications aren't guaranteed to survive app
-  // updates/reinstalls, so the streak reminder is re-armed on every launch
-  // (not just when the toggle is first switched on) whenever it's still
-  // meant to be on.
+  // updates/reinstalls, so the "ready" reminder is re-armed on every launch
+  // (not just right after a round is played) whenever it's still meant to be
+  // on. If a cycle is already unlocked (no cooldown pending), there's
+  // nothing to count down to yet, so this arms a fresh full-length cycle
+  // from now rather than firing immediately.
   if (prefs.dailyReminderEnabled) {
-    await NotificationService.instance.scheduleStreakReminder();
+    final now = DateTime.now();
+    final remaining = prefs.timeUntilNextDailyCycle(now);
+    await NotificationService.instance.scheduleDailyReadyReminder(
+      now.add(remaining > Duration.zero ? remaining : dailyCycleDuration),
+    );
   }
 
   runApp(

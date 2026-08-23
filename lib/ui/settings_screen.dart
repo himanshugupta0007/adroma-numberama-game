@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/ad_service.dart';
 import '../services/notification_service.dart';
 import '../services/rate_service.dart';
+import '../state/difficulty.dart';
 import '../state/preferences_service.dart';
 import '../state/settings_state.dart';
 import '../theme/app_colors.dart';
@@ -89,7 +90,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         // Leave the toggle off - state was never flipped to true.
         return;
       }
-      await notifications.scheduleStreakReminder();
+      final prefs = ref.read(preferencesServiceProvider);
+      final now = DateTime.now();
+      final remaining = prefs.timeUntilNextDailyCycle(now);
+      await notifications.scheduleDailyReadyReminder(
+        now.add(remaining > Duration.zero ? remaining : dailyCycleDuration),
+      );
       settingsNotifier.setDailyReminderEnabled(true);
     } else {
       await notifications.cancelStreakReminder();
