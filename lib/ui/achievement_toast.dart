@@ -47,6 +47,19 @@ class _AchievementToastState extends ConsumerState<AchievementToast> {
   /// still-queued event.
   AchievementEvent? _shown;
 
+  /// Whether the confetti cannons should be in the widget tree at all -
+  /// mounted only for [_burstDuration], then removed entirely.
+  ///
+  /// package:confetti has a bug: `_animationStatusListener` calls
+  /// `_continueAnimation()` (which restarts its internal AnimationController
+  /// via `forward(from: 0)`) unconditionally on every completion, regardless
+  /// of `shouldLoop` - so a "non-looping" burst's ticker actually never
+  /// stops on its own once played, ticking forever for as long as the
+  /// widget stays mounted. Unmounting `ConfettiWidget` (not just letting the
+  /// burst "finish") is what actually disposes that AnimationController -
+  /// see `_ConfettiWidgetState.dispose()`.
+  bool _confettiActive = false;
+
   @override
   void dispose() {
     _confettiTop.dispose();
@@ -56,9 +69,13 @@ class _AchievementToastState extends ConsumerState<AchievementToast> {
   }
 
   void _celebrate(AchievementEvent event) {
+    setState(() => _confettiActive = true);
     _confettiTop.play();
     _confettiLeft.play();
     _confettiRight.play();
+    Future.delayed(_burstDuration, () {
+      if (mounted) setState(() => _confettiActive = false);
+    });
     AudioService.instance.playOneOff(event.soundAsset);
     showDialog<void>(
       context: context,
@@ -97,6 +114,8 @@ class _AchievementToastState extends ConsumerState<AchievementToast> {
         if (mounted) _celebrate(front);
       });
     }
+
+    if (!_confettiActive) return const SizedBox.shrink();
 
     const colors = [
       AppColors.amber,
