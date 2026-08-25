@@ -15,7 +15,6 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/dialog_card.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
-import '../achievement_toast.dart';
 import '../results/results_screen.dart';
 import 'how_to_play_dialog.dart';
 import 'power_bar.dart';
@@ -243,27 +242,7 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
         if (didPop) return;
         _confirmExit();
       },
-      child: Stack(
-        children: [
-          _buildScaffold(context),
-          // Only ever fed events from Classic pairs (see
-          // GameStateNotifier.registerPairCleared) - the Daily Challenge
-          // never enqueues one, but skipping the mount entirely here avoids
-          // even a possible empty-queue widget on that route.
-          if (!widget.isDaily)
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: SafeArea(bottom: false, child: AchievementToast()),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildScaffold(BuildContext context) {
-    return Scaffold(
+      child: Scaffold(
         body: GraphPaperBackground(
           child: SafeArea(
             child: Padding(
@@ -309,6 +288,7 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
             ),
           ),
         ),
+      ),
     );
   }
 }

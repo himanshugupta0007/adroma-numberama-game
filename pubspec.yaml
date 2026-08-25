@@ -30,6 +30,7 @@ dependencies:
   firebase_analytics: ^12.4.6
   google_mobile_ads: ^9.0.0
   uuid: ^4.6.0
+  confetti: ^0.8.0
 
 dev_dependencies:
   flutter_test:

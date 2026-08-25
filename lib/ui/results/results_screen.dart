@@ -16,6 +16,7 @@ import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
 import '../../widgets/message_dialog.dart';
 import '../../widgets/wordmark_icon.dart';
+import '../achievement_toast.dart';
 import '../gameplay/gameplay_screen.dart';
 import '../home/bottom_nav_bar.dart';
 
@@ -176,7 +177,9 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
   @override
   Widget build(BuildContext context) {
     final streak = ref.watch(preferencesServiceProvider).currentStreak;
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       body: GraphPaperBackground(
         child: SafeArea(
           child: Padding(
@@ -342,6 +345,19 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
           ),
         ),
       ),
+        ),
+        // Shown once the round is fully over rather than mid-play, so a
+        // level-up doesn't interrupt active gameplay - only ever populated
+        // by a Classic round crossing a level threshold (see
+        // GameStateNotifier.registerPairCleared); the Daily Challenge never
+        // enqueues one, so this renders nothing on that path. Fills the
+        // whole screen (not just a top strip) so the confetti burst has
+        // room to fall - AchievementToast ignores pointer events itself,
+        // so this never blocks taps on the content underneath.
+        const Positioned.fill(
+          child: SafeArea(child: AchievementToast()),
+        ),
+      ],
     );
   }
 }
