@@ -11,12 +11,19 @@ class AchievementEvent {
     this.subtitle,
     required this.iconAsset,
     required this.soundAsset,
+    this.category,
   });
 
   final String title;
   final String? subtitle;
   final String iconAsset;
   final String soundAsset;
+
+  /// Optional coalescing key. Enqueuing an event whose [category] matches
+  /// one still waiting in the queue (not yet shown) drops the older one
+  /// first, so a burst of same-category events - e.g. climbing several
+  /// levels in one round - collapses into a single toast for the latest.
+  final String? category;
 }
 
 /// FIFO queue of [AchievementEvent]s waiting to be shown as a toast. One
@@ -26,7 +33,11 @@ class AchievementQueueNotifier extends StateNotifier<Queue<AchievementEvent>> {
   AchievementQueueNotifier() : super(Queue());
 
   void enqueue(AchievementEvent event) {
-    state = Queue.of(state)..add(event);
+    final queue = Queue.of(state);
+    if (event.category != null) {
+      queue.removeWhere((queued) => queued.category == event.category);
+    }
+    state = queue..add(event);
   }
 
   /// Removes the front event once its toast finishes displaying, exposing

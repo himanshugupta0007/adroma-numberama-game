@@ -248,6 +248,10 @@ class GameStateNotifier extends StateNotifier<GameState> {
               // assets before launch.
               iconAsset: 'assets/images/level_up.png',
               soundAsset: 'sounds/level-up.mp3',
+              // Coalesces a multi-level climb within one round (e.g. two
+              // pairs cleared back-to-back each crossing a threshold) into
+              // a single toast for the highest level reached.
+              category: 'level_up',
             ),
           );
     }
