@@ -40,6 +40,25 @@ class HowToPlayDialog extends StatelessWidget {
             icon: Icons.stacked_line_chart_rounded,
             text: 'Clear the whole board before it reaches the top to win.',
           ),
+          const SizedBox(height: 20),
+          Text(
+            'POWER-UPS',
+            style: AppTextStyles.caption,
+          ),
+          const SizedBox(height: 12),
+          const _Rule(
+            icon: Icons.shuffle_rounded,
+            text: 'Shuffle mixes up the board. Hint flashes a matching pair. '
+                'Clear Row wipes the bottom row instantly.',
+          ),
+          const SizedBox(height: 12),
+          const _Rule(
+            icon: Icons.play_arrow_rounded,
+            text: 'Most are free once per round - after that (or right away '
+                'in some modes), the teal play badge means a short ad '
+                'unlocks another use. Long-press any power-up for a '
+                'reminder of what it does.',
+          ),
           const SizedBox(height: 24),
           GradientButton(label: 'Got it', onPressed: onDismiss),
         ],

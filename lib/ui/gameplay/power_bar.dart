@@ -130,6 +130,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
         children: [
           _PowerSlot(
             icon: Icons.shuffle_rounded,
+            label: 'Shuffle',
+            description: 'Mixes up every number on the board.',
             count: shuffleAvailable ? 1 : null,
             adGated: !shuffleAvailable,
             onTap: handleShuffleTap,
@@ -138,6 +140,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
           const SizedBox(width: 16),
           _PowerSlot(
             icon: Icons.lightbulb_outline_rounded,
+            label: 'Hint',
+            description: 'Flashes one matching pair on the board.',
             count: hintAvailable ? 1 : null,
             adGated: !hintAvailable,
             onTap: handleHintTap,
@@ -146,6 +150,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
           const SizedBox(width: 16),
           _PowerSlot(
             icon: Icons.delete_sweep_rounded,
+            label: 'Clear Row',
+            description: 'Instantly clears the bottom row.',
             count: clearRowAvailable ? 1 : null,
             adGated: !clearRowAvailable,
             onTap: handleClearRowTap,
@@ -160,6 +166,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
 class _PowerSlot extends StatefulWidget {
   const _PowerSlot({
     required this.icon,
+    required this.label,
+    required this.description,
     this.count,
     this.adGated = false,
     this.onTap,
@@ -167,6 +175,15 @@ class _PowerSlot extends StatefulWidget {
   });
 
   final IconData icon;
+
+  /// Short caption drawn under the icon at all times - a player shouldn't
+  /// have to discover what a slot does through trial and error.
+  final String label;
+
+  /// What this power-up actually does, shown in the long-press tooltip
+  /// alongside the current free/ad-gated status (see [_PowerSlotState]).
+  final String description;
+
   final int? count;
   final bool adGated;
 
@@ -227,74 +244,100 @@ class _PowerSlotState extends State<_PowerSlot>
     super.dispose();
   }
 
+  /// Appends the slot's current free/ad-gated status to its description, so
+  /// the long-press tooltip answers "what does this do" and "why does it
+  /// look like that right now" in one message instead of two.
+  String get _tooltipMessage {
+    final status = widget.count != null
+        ? 'Free to use.'
+        : widget.adGated
+            ? 'Watch a short ad to use it.'
+            : '';
+    return status.isEmpty
+        ? widget.description
+        : '${widget.description} $status';
+  }
+
   @override
   Widget build(BuildContext context) {
     final inert = widget.count == null && !widget.adGated;
-    return ScaleTransition(
-      scale: _scale,
-      child: SizedBox(
-        width: 44,
-        height: 44,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(13),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: widget.onTap,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: AppColors.surface,
+    return Tooltip(
+      message: _tooltipMessage,
+      triggerMode: TooltipTriggerMode.longPress,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ScaleTransition(
+            scale: _scale,
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(13),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: widget.onTap,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: AppColors.surface,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          widget.icon,
+                          size: 18,
+                          color: inert
+                              ? AppColors.textLow.withValues(alpha: 0.55)
+                              : AppColors.textHi,
+                        ),
+                      ),
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    widget.icon,
-                    size: 18,
-                    color: inert
-                        ? AppColors.textLow.withValues(alpha: 0.55)
-                        : AppColors.textHi,
-                  ),
-                ),
+                  if (widget.count != null)
+                    Positioned(
+                      bottom: -6,
+                      right: -6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: AppColors.bgNavy,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: AppColors.surfaceRaised),
+                        ),
+                        child: Text(
+                          '${widget.count}',
+                          style:
+                              AppTextStyles.mono(9, color: AppColors.textMid),
+                        ),
+                      ),
+                    ),
+                  if (widget.adGated)
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: const BoxDecoration(
+                          color: AppColors.teal,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.play_arrow_rounded,
+                            size: 10, color: AppColors.bgDeep),
+                      ),
+                    ),
+                ],
               ),
             ),
-            if (widget.count != null)
-              Positioned(
-                bottom: -6,
-                right: -6,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: AppColors.bgNavy,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppColors.surfaceRaised),
-                  ),
-                  child: Text(
-                    '${widget.count}',
-                    style: AppTextStyles.mono(9, color: AppColors.textMid),
-                  ),
-                ),
-              ),
-            if (widget.adGated)
-              Positioned(
-                top: -6,
-                right: -6,
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: const BoxDecoration(
-                    color: AppColors.teal,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.play_arrow_rounded,
-                      size: 10, color: AppColors.bgDeep),
-                ),
-              ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 4),
+          Text(widget.label, style: AppTextStyles.caption),
+        ],
       ),
     );
   }
