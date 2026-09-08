@@ -45,11 +45,11 @@ PODS:
     - Flutter
   - flutter_timezone (0.0.1):
     - Flutter
-  - Google-Mobile-Ads-SDK (13.3.0):
+  - Google-Mobile-Ads-SDK (13.9.0):
     - GoogleUserMessagingPlatform (>= 1.1)
-  - google_mobile_ads (9.0.0):
+  - google_mobile_ads (9.1.0):
     - Flutter
-    - Google-Mobile-Ads-SDK (~> 13.3.0)
+    - Google-Mobile-Ads-SDK (~> 13.7)
     - webview_flutter_wkwebview
   - GoogleAdsOnDeviceConversion (3.6.1):
     - GoogleUtilities/Environment (~> 8.1)
@@ -106,6 +106,9 @@ PODS:
   - GoogleUtilities/UserDefaults (8.1.2):
     - GoogleUtilities/Logger
     - GoogleUtilities/Privacy
+  - in_app_purchase_storekit (0.0.1):
+    - Flutter
+    - FlutterMacOS
   - in_app_review (2.0.0):
     - Flutter
   - nanopb (3.30910.0):
@@ -132,6 +135,7 @@ DEPENDENCIES:
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
   - flutter_timezone (from `.symlinks/plugins/flutter_timezone/ios`)
   - google_mobile_ads (from `.symlinks/plugins/google_mobile_ads/ios`)
+  - in_app_purchase_storekit (from `.symlinks/plugins/in_app_purchase_storekit/darwin`)
   - in_app_review (from `.symlinks/plugins/in_app_review/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
@@ -168,6 +172,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_timezone/ios"
   google_mobile_ads:
     :path: ".symlinks/plugins/google_mobile_ads/ios"
+  in_app_purchase_storekit:
+    :path: ".symlinks/plugins/in_app_purchase_storekit/darwin"
   in_app_review:
     :path: ".symlinks/plugins/in_app_review/ios"
   package_info_plus:
@@ -191,12 +197,13 @@ SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_local_notifications: eda81afddbf18f8589f6ec069ce593c4c6378769
   flutter_timezone: ac3da59ac941ff1c98a2e1f0293420e020120282
-  Google-Mobile-Ads-SDK: 7692126a35ed859f20635af281c50a2162be8bea
-  google_mobile_ads: e0c300fcd472c3fa5a00d6cca8b0c65bbbb15faf
+  Google-Mobile-Ads-SDK: cec761d0da669c462bcc19cd16c747498b9f39f7
+  google_mobile_ads: 8c61669fb8e2ba987b0b7116b5265ba647cdca0c
   GoogleAdsOnDeviceConversion: e3b71da24ff4cf01cf520756ac1c2b93c07b86ff
   GoogleAppMeasurement: 2234668e2451f9da37b93dad7830e457600c008f
   GoogleUserMessagingPlatform: befe603da6501006420c206222acd449bba45a9c
   GoogleUtilities: 766ace00c6b10d8148408f329d10c4f051931850
+  in_app_purchase_storekit: 2342c0a5da86593124d08dd13d920f39a52b273a
   in_app_review: 436034b18594851a7328d7f1c2ed5ec235b79cfc
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   package_info_plus: c0502532a26c7662a62a356cebe2692ec5fe4ec4
@@ -205,6 +212,6 @@ SPEC CHECKSUMS:
   url_launcher_ios: bb13df5870e8c4234ca12609d04010a21be43dfa
   webview_flutter_wkwebview: 29eb20d43355b48fe7d07113835b9128f84e3af4
 
-PODFILE CHECKSUM: 4bb2ec1ef4f9633649448d458ab66b3d236c4bf1
+PODFILE CHECKSUM: cf5262d0e0be5c30036b095b109ebfd0d00ec41a
 
 COCOAPODS: 1.16.2

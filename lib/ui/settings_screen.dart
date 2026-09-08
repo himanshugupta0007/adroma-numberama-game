@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/ad_service.dart';
 import '../services/notification_service.dart';
+import '../services/purchase_service.dart';
 import '../services/rate_service.dart';
 import '../state/difficulty.dart';
 import '../state/preferences_service.dart';
@@ -103,6 +104,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _buyRemoveAds(BuildContext context) async {
+    await PurchaseService.instance.buyRemoveAds();
+  }
+
+  Future<void> _restorePurchases(BuildContext context, WidgetRef ref) async {
+    await PurchaseService.instance.restorePurchases();
+    if (!context.mounted) return;
+    final restored = ref.read(preferencesServiceProvider).removeAdsPurchased;
+    await showMessageDialog(
+      context,
+      restored ? 'Purchase restored.' : 'No previous purchase found.',
+    );
+  }
+
   Future<void> _confirmResetProgress(
       BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
@@ -117,10 +132,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (!context.mounted) return;
     await showMessageDialog(context, 'Progress reset.');
-  }
-
-  void _showComingSoon(BuildContext context, String label) {
-    showMessageDialog(context, '$label — coming soon');
   }
 
   /// Manual counterpart to the home screen's automatic prompt (see
@@ -171,6 +182,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsStateProvider);
     final settingsNotifier = ref.read(settingsStateProvider.notifier);
+    // "Remove Ads" can flip to purchased from PurchaseService's own async
+    // stream callback, outside any state this screen owns directly - see
+    // preferencesRevisionProvider's doc for why this needs an explicit
+    // watch rather than following from settingsStateProvider.
+    ref.watch(preferencesRevisionProvider);
+    final removeAdsPurchased =
+        ref.read(preferencesServiceProvider).removeAdsPurchased;
+    final removeAdsProduct = PurchaseService.instance.removeAdsProduct;
 
     return Scaffold(
       body: GraphPaperBackground(
@@ -242,19 +261,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SettingsSectionHeader('Purchases & Ads'),
                       SettingsSectionCard(
                         rows: [
-                          // TODO(iap): open remove-ads purchase flow.
-                          const SettingsRow(
+                          SettingsRow(
                             label: 'Remove Ads',
-                            enabled: false,
-                            trailing: _ComingSoonTag(),
+                            enabled: !removeAdsPurchased &&
+                                removeAdsProduct != null,
+                            trailing: removeAdsPurchased
+                                ? const _OwnedTag()
+                                : Text(
+                                    removeAdsProduct?.price ?? '···',
+                                    style: AppTextStyles.display(
+                                      13,
+                                      weight: FontWeight.w600,
+                                      color: AppColors.textHi,
+                                    ),
+                                  ),
+                            onTap: removeAdsPurchased
+                                ? null
+                                : () => _buyRemoveAds(context),
                           ),
                           SettingsRow(
                             label: 'Restore Purchases',
                             trailing: _chevron(),
-                            // TODO(iap): call in_app_purchase
-                            // restorePurchases().
-                            onTap: () =>
-                                _showComingSoon(context, 'Restore Purchases'),
+                            onTap: () => _restorePurchases(context, ref),
                           ),
                           SettingsRow(
                             label: 'Manage Ad Preferences',
@@ -357,21 +385,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
-class _ComingSoonTag extends StatelessWidget {
-  const _ComingSoonTag();
+class _OwnedTag extends StatelessWidget {
+  const _OwnedTag();
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
+        color: AppColors.teal.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        'Coming soon',
+        'Owned',
         style: AppTextStyles.mono(9,
-            weight: FontWeight.w600, color: AppColors.textLow),
+            weight: FontWeight.w600, color: AppColors.teal),
       ),
     );
   }

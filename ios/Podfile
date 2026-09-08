@@ -58,6 +58,23 @@ post_install do |installer|
       # Disabling it here doesn't affect the real build, only this extra
       # check.
       config.build_settings['ENABLE_MODULE_VERIFIER'] = 'NO'
+
+      # google_mobile_ads' generated module map includes GoogleMobileAds'
+      # private "_Beta" header from outside that framework's module, which
+      # Xcode's modular-includes check rejects by default and fails the
+      # build with "non-modular header inside framework module".
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+    end
+  end
+
+  # Runner.xcodeproj itself (not just the Pods project) triggers the
+  # google_mobile_ads module compile when it's the first target to import
+  # it, so the flag above also needs to reach Runner via the Pods-Runner
+  # aggregate xcconfig that Runner's build configs include.
+  installer.aggregate_targets.each do |aggregate_target|
+    aggregate_target.xcconfigs.each do |config_name, config_file|
+      config_file.attributes['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      config_file.save_as(aggregate_target.xcconfig_path(config_name))
     end
   end
 end

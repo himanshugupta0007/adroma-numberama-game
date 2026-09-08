@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'firebase_options.dart';
 import 'services/ad_service.dart';
 import 'services/notification_service.dart';
+import 'services/purchase_service.dart';
 import 'state/difficulty.dart';
 import 'state/preferences_service.dart';
 import 'theme/app_theme.dart';
@@ -19,13 +20,15 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    AdService.instance.initialize();
-  });
   await Hive.initFlutter();
   final box = await Hive.openBox(PreferencesService.boxName);
   final prefs = PreferencesService(box);
   prefs.registerAppOpened();
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    AdService.instance.initialize();
+    PurchaseService.instance.initialize(prefs);
+  });
 
   await NotificationService.instance.initialize();
   // Scheduled notifications aren't guaranteed to survive app

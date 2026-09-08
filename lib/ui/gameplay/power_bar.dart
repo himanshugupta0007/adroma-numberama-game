@@ -47,6 +47,13 @@ class _PowerBarState extends ConsumerState<PowerBar> {
   /// stay a plain rebuild counter rather than anything richer.
   int _nudgeTick = 0;
 
+  /// Bumped each time the matching power-up actually fires (free use or
+  /// ad-granted) so [_PowerSlot] can play its "used" burst. Same
+  /// change-detection convention as [_nudgeTick] - only transitions matter.
+  int _shuffleUsedTick = 0;
+  int _hintUsedTick = 0;
+  int _clearRowUsedTick = 0;
+
   @override
   Widget build(BuildContext context) {
     final selectionManager = widget.selectionManager;
@@ -94,29 +101,41 @@ class _PowerBarState extends ConsumerState<PowerBar> {
       if (shuffleAvailable) {
         selectionManager.shuffle();
         ref.read(gameStateProvider.notifier).useShuffle();
+        setState(() => _shuffleUsedTick++);
         return;
       }
-      watchAdFor(selectionManager.shuffle);
+      watchAdFor(() {
+        selectionManager.shuffle();
+        setState(() => _shuffleUsedTick++);
+      });
     }
 
     void handleHintTap() {
       if (hintAvailable) {
         selectionManager.hint();
         ref.read(gameStateProvider.notifier).useHint();
+        setState(() => _hintUsedTick++);
         return;
       }
-      watchAdFor(selectionManager.hint);
+      watchAdFor(() {
+        selectionManager.hint();
+        setState(() => _hintUsedTick++);
+      });
     }
 
     void handleClearRowTap() {
       if (clearRowAvailable) {
         selectionManager.clearRow();
         ref.read(gameStateProvider.notifier).useClearRow();
+        setState(() => _clearRowUsedTick++);
         return;
       }
       // In the Daily Challenge this is the only path: clearRowAvailable
       // starts false and never flips true there.
-      watchAdFor(selectionManager.clearRow);
+      watchAdFor(() {
+        selectionManager.clearRow();
+        setState(() => _clearRowUsedTick++);
+      });
     }
 
     return Container(
@@ -136,8 +155,9 @@ class _PowerBarState extends ConsumerState<PowerBar> {
             adGated: !shuffleAvailable,
             onTap: handleShuffleTap,
             nudge: _nudgeTick,
+            used: _shuffleUsedTick,
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 20),
           _PowerSlot(
             icon: Icons.lightbulb_outline_rounded,
             label: 'Hint',
@@ -146,8 +166,9 @@ class _PowerBarState extends ConsumerState<PowerBar> {
             adGated: !hintAvailable,
             onTap: handleHintTap,
             nudge: _nudgeTick,
+            used: _hintUsedTick,
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 20),
           _PowerSlot(
             icon: Icons.delete_sweep_rounded,
             label: 'Clear Row',
@@ -156,6 +177,7 @@ class _PowerBarState extends ConsumerState<PowerBar> {
             adGated: !clearRowAvailable,
             onTap: handleClearRowTap,
             nudge: _nudgeTick,
+            used: _clearRowUsedTick,
           ),
         ],
       ),
@@ -172,6 +194,7 @@ class _PowerSlot extends StatefulWidget {
     this.adGated = false,
     this.onTap,
     this.nudge = 0,
+    this.used = 0,
   });
 
   final IconData icon;
@@ -195,6 +218,10 @@ class _PowerSlot extends StatefulWidget {
   /// *changes* to this value matter (see [_PowerSlotState.didUpdateWidget])
   /// - the number itself carries no meaning.
   final int nudge;
+
+  /// Bumped by [PowerBar] each time this power-up actually fires, to play
+  /// the "used" burst below. Same change-detection convention as [nudge].
+  final int used;
 
   @override
   State<_PowerSlot> createState() => _PowerSlotState();
@@ -230,17 +257,49 @@ class _PowerSlotState extends State<_PowerSlot>
     ],
   ]).animate(_pulseController);
 
+  /// Plays once whenever the power-up actually fires: the icon dips and
+  /// bounces back while a translucent ring expands out from behind it and
+  /// fades - a quick "consumed" pop distinct from the slower, repeating
+  /// "try me" pulse above.
+  static const _usedDuration = Duration(milliseconds: 500);
+
+  late final AnimationController _usedController = AnimationController(
+    vsync: this,
+    duration: _usedDuration,
+  );
+
+  late final Animation<double> _usedIconScale = TweenSequence<double>([
+    TweenSequenceItem(
+      weight: 30,
+      tween: Tween(begin: 1.0, end: 0.8).chain(CurveTween(curve: Curves.easeOut)),
+    ),
+    TweenSequenceItem(
+      weight: 70,
+      tween: Tween(begin: 0.8, end: 1.0).chain(CurveTween(curve: Curves.elasticOut)),
+    ),
+  ]).animate(_usedController);
+
+  late final Animation<double> _burstScale = Tween(begin: 0.5, end: 2.0)
+      .animate(CurvedAnimation(parent: _usedController, curve: Curves.easeOut));
+
+  late final Animation<double> _burstOpacity = Tween(begin: 0.55, end: 0.0)
+      .animate(CurvedAnimation(parent: _usedController, curve: Curves.easeOut));
+
   @override
   void didUpdateWidget(covariant _PowerSlot oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.nudge != oldWidget.nudge) {
       _pulseController.forward(from: 0);
     }
+    if (widget.used != oldWidget.used) {
+      _usedController.forward(from: 0);
+    }
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _usedController.dispose();
     super.dispose();
   }
 
@@ -258,6 +317,10 @@ class _PowerSlotState extends State<_PowerSlot>
         : '${widget.description} $status';
   }
 
+  /// Slot box size - large enough that the icon reads clearly at a glance
+  /// and the tap target is comfortable, not just the icon's own bounds.
+  static const _boxSize = 60.0;
+
   @override
   Widget build(BuildContext context) {
     final inert = widget.count == null && !widget.adGated;
@@ -269,73 +332,98 @@ class _PowerSlotState extends State<_PowerSlot>
         children: [
           ScaleTransition(
             scale: _scale,
-            child: SizedBox(
-              width: 44,
-              height: 44,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(13),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: widget.onTap,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: AppColors.surface,
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          widget.icon,
-                          size: 18,
-                          color: inert
-                              ? AppColors.textLow.withValues(alpha: 0.55)
-                              : AppColors.textHi,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (widget.count != null)
-                    Positioned(
-                      bottom: -6,
-                      right: -6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: AppColors.bgNavy,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: AppColors.surfaceRaised),
-                        ),
-                        child: Text(
-                          '${widget.count}',
-                          style:
-                              AppTextStyles.mono(9, color: AppColors.textMid),
+            child: ScaleTransition(
+              scale: _usedIconScale,
+              child: SizedBox(
+                width: _boxSize,
+                height: _boxSize,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Expanding ring that fades out - the visual cue that a
+                    // power-up was just consumed, distinct from the ongoing
+                    // "try me" pulse which loops instead of firing once.
+                    Positioned.fill(
+                      child: AnimatedBuilder(
+                        animation: _usedController,
+                        builder: (context, child) => Opacity(
+                          opacity: _burstOpacity.value,
+                          child: Transform.scale(
+                            scale: _burstScale.value,
+                            child: const DecoratedBox(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.teal,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  if (widget.adGated)
-                    Positioned(
-                      top: -6,
-                      right: -6,
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: const BoxDecoration(
-                          color: AppColors.teal,
-                          shape: BoxShape.circle,
+                    Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: widget.onTap,
+                        child: Container(
+                          width: _boxSize,
+                          height: _boxSize,
+                          decoration: const BoxDecoration(
+                            color: AppColors.surface,
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            widget.icon,
+                            size: 26,
+                            color: inert
+                                ? AppColors.textLow.withValues(alpha: 0.55)
+                                : AppColors.textHi,
+                          ),
                         ),
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.play_arrow_rounded,
-                            size: 10, color: AppColors.bgDeep),
                       ),
                     ),
-                ],
+                    if (widget.count != null)
+                      Positioned(
+                        bottom: -6,
+                        right: -6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.bgNavy,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: AppColors.surfaceRaised),
+                          ),
+                          child: Text(
+                            '${widget.count}',
+                            style: AppTextStyles.mono(10,
+                                color: AppColors.textMid),
+                          ),
+                        ),
+                      ),
+                    if (widget.adGated)
+                      Positioned(
+                        top: -6,
+                        right: -6,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            color: AppColors.teal,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.play_arrow_rounded,
+                              size: 13, color: AppColors.bgDeep),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(widget.label, style: AppTextStyles.caption),
         ],
       ),
