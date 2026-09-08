@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
+import '../config/app_config.dart';
 import 'difficulty.dart';
 import 'player_progress.dart';
 
@@ -363,8 +364,13 @@ class PreferencesService {
   /// site (interstitials, banners, and the rewarded power-ups in
   /// [PowerBar]) checks this first and skips straight to the free/granted
   /// outcome instead of calling `AdService` at all.
+  ///
+  /// Also `true` whenever [AppConfig.adsAndPurchasesEnabled] is off, so
+  /// every one of those call sites goes straight to the free outcome
+  /// without any per-site changes.
   bool get removeAdsPurchased =>
-      (_box.get(_removeAdsPurchasedKey) as bool?) ?? false;
+      !AppConfig.adsAndPurchasesEnabled ||
+      ((_box.get(_removeAdsPurchasedKey) as bool?) ?? false);
 
   Future<void> setRemoveAdsPurchased(bool value) =>
       _box.put(_removeAdsPurchasedKey, value);

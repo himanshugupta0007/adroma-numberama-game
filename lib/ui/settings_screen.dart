@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/app_config.dart';
 import '../services/ad_service.dart';
 import '../services/notification_service.dart';
 import '../services/purchase_service.dart';
@@ -257,48 +258,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
-                      const SettingsSectionHeader('Purchases & Ads'),
-                      SettingsSectionCard(
-                        rows: [
-                          SettingsRow(
-                            label: 'Remove Ads',
-                            enabled: !removeAdsPurchased &&
-                                removeAdsProduct != null,
-                            trailing: removeAdsPurchased
-                                ? const _OwnedTag()
-                                : Text(
-                                    removeAdsProduct?.price ?? '···',
-                                    style: AppTextStyles.display(
-                                      13,
-                                      weight: FontWeight.w600,
-                                      color: AppColors.textHi,
+                      if (AppConfig.adsAndPurchasesEnabled) ...[
+                        const SizedBox(height: 24),
+                        const SettingsSectionHeader('Purchases & Ads'),
+                        SettingsSectionCard(
+                          rows: [
+                            SettingsRow(
+                              label: 'Remove Ads',
+                              enabled: !removeAdsPurchased &&
+                                  removeAdsProduct != null,
+                              trailing: removeAdsPurchased
+                                  ? const _OwnedTag()
+                                  : Text(
+                                      removeAdsProduct?.price ?? '···',
+                                      style: AppTextStyles.display(
+                                        13,
+                                        weight: FontWeight.w600,
+                                        color: AppColors.textHi,
+                                      ),
                                     ),
-                                  ),
-                            onTap: removeAdsPurchased
-                                ? null
-                                : () => _buyRemoveAds(context),
-                          ),
-                          SettingsRow(
-                            label: 'Restore Purchases',
-                            trailing: _chevron(),
-                            onTap: () => _restorePurchases(context, ref),
-                          ),
-                          SettingsRow(
-                            label: 'Manage Ad Preferences',
-                            trailing: _chevron(),
-                            // A no-op for players outside the EEA/UK, whose
-                            // region never required a consent form in the
-                            // first place - see AdService.
-                            // showPrivacyOptionsForm. Left visible
-                            // unconditionally rather than only for players
-                            // it applies to, since a GDPR consent form
-                            // itself only reaches EEA/UK players.
-                            onTap: () =>
-                                AdService.instance.showPrivacyOptionsForm(),
-                          ),
-                        ],
-                      ),
+                              onTap: removeAdsPurchased
+                                  ? null
+                                  : () => _buyRemoveAds(context),
+                            ),
+                            SettingsRow(
+                              label: 'Restore Purchases',
+                              trailing: _chevron(),
+                              onTap: () => _restorePurchases(context, ref),
+                            ),
+                            SettingsRow(
+                              label: 'Manage Ad Preferences',
+                              trailing: _chevron(),
+                              // A no-op for players outside the EEA/UK, whose
+                              // region never required a consent form in the
+                              // first place - see AdService.
+                              // showPrivacyOptionsForm. Left visible
+                              // unconditionally rather than only for players
+                              // it applies to, since a GDPR consent form
+                              // itself only reaches EEA/UK players.
+                              onTap: () =>
+                                  AdService.instance.showPrivacyOptionsForm(),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       const SettingsSectionHeader('Data'),
                       SettingsSectionCard(

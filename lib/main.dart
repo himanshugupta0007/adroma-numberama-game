@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'config/app_config.dart';
 import 'firebase_options.dart';
 import 'services/ad_service.dart';
 import 'services/notification_service.dart';
@@ -25,10 +26,12 @@ Future<void> main() async {
   final prefs = PreferencesService(box);
   prefs.registerAppOpened();
 
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    AdService.instance.initialize();
-    PurchaseService.instance.initialize(prefs);
-  });
+  if (AppConfig.adsAndPurchasesEnabled) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AdService.instance.initialize();
+      PurchaseService.instance.initialize(prefs);
+    });
+  }
 
   await NotificationService.instance.initialize();
   // Scheduled notifications aren't guaranteed to survive app
