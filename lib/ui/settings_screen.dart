@@ -58,12 +58,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_isSharingApp) return;
     setState(() => _isSharingApp = true);
     try {
-      const text = 'I love playing Numberama, a number-matching puzzle '
+      const text = 'I love playing Pairoma, a number-matching puzzle '
           "game - you should give it a try!";
       await SharePlus.instance.share(ShareParams(text: text));
     } catch (_) {
       if (mounted) {
-        await showMessageDialog(context, 'Could not share Numberama.',
+        await showMessageDialog(context, 'Could not share Pairoma.',
             isError: true);
       }
     } finally {
@@ -85,7 +85,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         if (!context.mounted) return;
         await showMessageDialog(
           context,
-          "Notifications are off for Numberama at the system level - "
+          "Notifications are off for Pairoma at the system level - "
           'enable them in system settings to get streak reminders.',
           isError: true,
         );
@@ -148,7 +148,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final uri = Uri(
       scheme: 'mailto',
       path: SettingsScreen._supportEmail,
-      queryParameters: {'subject': 'Numberama feedback'},
+      queryParameters: {'subject': 'Pairoma feedback'},
     );
     final launched = await launchUrl(uri);
     if (!launched && context.mounted) {
@@ -321,7 +321,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       SettingsSectionCard(
                         rows: [
                           SettingsRow(
-                            label: 'Share Numberama',
+                            label: 'Share Pairoma',
                             subtitle: 'Invite friends to play',
                             trailing: _isSharingApp
                                 ? const SizedBox(
@@ -340,7 +340,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       SettingsSectionCard(
                         rows: [
                           SettingsRow(
-                            label: 'Rate Numberama',
+                            label: 'Rate Pairoma',
                             trailing: _chevron(),
                             onTap: () => _rateApp(ref),
                           ),

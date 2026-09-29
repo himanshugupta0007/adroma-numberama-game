@@ -62,7 +62,7 @@ class NumberamaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Numberama',
+      title: 'Pairoma',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark(),
       home: const HomeScreen(),

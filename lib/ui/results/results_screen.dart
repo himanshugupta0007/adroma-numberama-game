@@ -148,9 +148,9 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
       final bytes = byteData.buffer.asUint8List();
 
       final text = widget.isDaily
-          ? "I scored ${widget.dailyStars}/3 stars on today's Numberama "
+          ? "I scored ${widget.dailyStars}/3 stars on today's Pairoma "
               "Daily (${widget.difficulty.label})! Can you beat me?"
-          : 'I scored ${widget.score} points in Numberama! Can you beat me?';
+          : 'I scored ${widget.score} points in Pairoma! Can you beat me?';
 
       await SharePlus.instance.share(
         ShareParams(
@@ -159,7 +159,7 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
             XFile.fromData(
               bytes,
               mimeType: 'image/png',
-              name: 'numberama-result.png',
+              name: 'pairoma-result.png',
             ),
           ],
         ),
@@ -509,13 +509,13 @@ class _ShareCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // App branding, so the card reads as "Numberama" on its own once
+          // App branding, so the card reads as "Pairoma" on its own once
           // it's out in a chat/feed, detached from the app it was shared from.
           Row(
             children: [
               const WordmarkIcon(size: 20),
               const SizedBox(width: 8),
-              Text('NUMBERAMA',
+              Text('PAIROMA',
                   style: AppTextStyles.display(13,
                       weight: FontWeight.w700, color: AppColors.textHi)),
               const Spacer(),
@@ -559,9 +559,9 @@ class _ShareCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             isDaily
-                ? 'Numberama Daily · ${dailySeedLabel(DateTime.now())} · '
+                ? 'Pairoma Daily · ${dailySeedLabel(DateTime.now())} · '
                     '${difficulty.label}'
-                : 'Numberama #$classicRoundNumber',
+                : 'Pairoma #$classicRoundNumber',
             style: AppTextStyles.caption,
           ),
         ],

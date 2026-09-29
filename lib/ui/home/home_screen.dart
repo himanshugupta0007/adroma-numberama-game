@@ -111,7 +111,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     const SizedBox(height: 8),
                     const WordmarkIcon(size: 64),
                     const SizedBox(height: 8),
-                    Text('NUMBERAMA',
+                    Text('PAIROMA',
                         style:
                             AppTextStyles.display(36, weight: FontWeight.w800)),
                     const SizedBox(height: 4),
@@ -315,7 +315,7 @@ class _RatePromptDialog extends StatelessWidget {
           const Icon(Icons.star_rounded, color: AppColors.amber, size: 44),
           const SizedBox(height: 12),
           Text(
-            'Enjoying Numberama?',
+            'Enjoying Pairoma?',
             textAlign: TextAlign.center,
             style: AppTextStyles.display(18, weight: FontWeight.w700),
           ),
