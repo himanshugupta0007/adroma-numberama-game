@@ -1,4 +1,4 @@
-# Numberama
+# Pairoma
 
 A number-matching puzzle game built with Flutter and [Flame](https://flame-engine.org/). Clear the board by tapping pairs of tiles that match — either the same value, or two values that sum to 10 — before a rising stack of new rows reaches the top.
 
