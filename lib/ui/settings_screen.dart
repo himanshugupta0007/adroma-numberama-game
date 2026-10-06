@@ -19,6 +19,7 @@ import '../widgets/graph_paper_background.dart';
 import '../widgets/message_dialog.dart';
 import '../widgets/settings_row.dart';
 import 'home/bottom_nav_bar.dart';
+import 'onboarding/onboarding_screen.dart';
 
 /// The full Settings screen, reached from the home screen's bottom nav.
 /// Every toggle here mirrors straight to [PreferencesService] via
@@ -166,6 +167,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await showMessageDialog(context, "Couldn't open the link.",
           isError: true);
     }
+  }
+
+  void _replayTutorial(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const OnboardingScreen(isReplay: true),
+      ),
+    );
   }
 
   Widget _switch(bool value, ValueChanged<bool> onChanged) {
@@ -339,6 +348,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SettingsSectionHeader('About'),
                       SettingsSectionCard(
                         rows: [
+                          SettingsRow(
+                            label: 'Replay Tutorial',
+                            trailing: _chevron(),
+                            onTap: () => _replayTutorial(context),
+                          ),
                           SettingsRow(
                             label: 'Rate Pairoma',
                             trailing: _chevron(),

@@ -74,6 +74,7 @@ class PreferencesService {
   static const boxName = 'numberama_prefs';
 
   static const _hasSeenHowToPlayKey = 'has_seen_how_to_play';
+  static const _hasSeenOnboardingKey = 'has_seen_onboarding';
   static const _bestScoreKey = 'best_score';
   static const _todayBestScoreKey = 'today_best_score';
   static const _todayBestScorePeriodKey = 'today_best_score_period';
@@ -103,6 +104,17 @@ class PreferencesService {
 
   Future<void> setHasSeenHowToPlay() =>
       _box.put(_hasSeenHowToPlayKey, true);
+
+  /// Whether the animated first-launch tutorial (shown before the home
+  /// screen on a player's very first open) has already been completed or
+  /// skipped. Separate from [hasSeenHowToPlay] - that one gates the static
+  /// rules dialog shown before a player's first round, this one gates the
+  /// onboarding screen shown before they ever reach the home screen at all.
+  bool get hasSeenOnboarding =>
+      (_box.get(_hasSeenOnboardingKey) as bool?) ?? false;
+
+  Future<void> setHasSeenOnboarding() =>
+      _box.put(_hasSeenOnboardingKey, true);
 
   /// The highest score ever reached across all rounds (Classic and Daily
   /// combined), `0` if none yet - "BEST EVER" on the home screen.

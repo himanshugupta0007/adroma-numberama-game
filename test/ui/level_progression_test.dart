@@ -47,6 +47,7 @@ void main() {
       await tempDir.delete(recursive: true);
     });
     await box.put('has_seen_how_to_play', true);
+    await box.put('has_seen_onboarding', true);
 
     await tester.pumpWidget(
       ProviderScope(

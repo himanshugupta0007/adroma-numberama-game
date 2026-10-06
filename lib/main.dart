@@ -13,6 +13,7 @@ import 'state/difficulty.dart';
 import 'state/preferences_service.dart';
 import 'theme/app_theme.dart';
 import 'ui/home/home_screen.dart';
+import 'ui/onboarding/onboarding_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,16 +57,18 @@ Future<void> main() async {
   );
 }
 
-class NumberamaApp extends StatelessWidget {
+class NumberamaApp extends ConsumerWidget {
   const NumberamaApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasSeenOnboarding =
+        ref.watch(preferencesServiceProvider).hasSeenOnboarding;
     return MaterialApp(
       title: 'Pairoma',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark(),
-      home: const HomeScreen(),
+      home: hasSeenOnboarding ? const HomeScreen() : const OnboardingScreen(),
     );
   }
 }

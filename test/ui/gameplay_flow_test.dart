@@ -66,6 +66,7 @@ Future<(NumberamaGame, ProviderContainer)> _openGameplay(
     await tempDir.delete(recursive: true);
   });
   await box.put('has_seen_how_to_play', hasSeenHowToPlay);
+  await box.put('has_seen_onboarding', true);
   await box.put('best_score', bestScore);
 
   await tester.pumpWidget(
