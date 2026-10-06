@@ -228,7 +228,7 @@ class _PowerSlot extends StatefulWidget {
 }
 
 class _PowerSlotState extends State<_PowerSlot>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// One full nudge plays 3 pulses back to back over this long, so it stays
   /// noticeable rather than flashing past in under a second.
   static const _pulseDuration = Duration(milliseconds: 3000);
