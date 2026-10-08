@@ -1,6 +1,8 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+
+import '../power_up_reward_dialog.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -114,7 +116,10 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowInterstitial());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await maybeShowPowerUpReward(context, ref);
+      _maybeShowInterstitial();
+    });
   }
 
   /// Shows the preloaded interstitial roughly every third Classic round -

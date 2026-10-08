@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'achievement_queue.dart';
 import 'difficulty.dart';
 import 'level_calculator.dart';
+import 'power_up.dart';
 import 'preferences_service.dart';
 
 /// High-level lifecycle of a single game session.
@@ -241,6 +242,9 @@ class GameStateNotifier extends StateNotifier<GameState> {
     final newLevel = calculateLevel(newXp);
 
     if (newLevel > oldLevel) {
+      final rewards = newLevel ~/ levelsPerPowerUpReward -
+          oldLevel ~/ levelsPerPowerUpReward;
+      if (rewards > 0) prefs.addPendingPowerUpRewards(rewards);
       ref.read(achievementQueueProvider.notifier).enqueue(
             AchievementEvent(
               title: 'Level $newLevel!',
@@ -275,29 +279,18 @@ class GameStateNotifier extends StateNotifier<GameState> {
     );
   }
 
-  /// Spends the round's free shuffle. Idempotent - calling it again once
-  /// already spent (e.g. a stray double-tap) is a no-op rather than an
-  /// error, since there's nothing left to spend.
+  /// Power-up counts live in [PreferencesService]; these just clear the
+  /// miss streak that drives the power bar's nudge once one is used.
   void useShuffle() {
-    if (!state.shuffleAvailable) return;
     state = state.copyWith(shuffleAvailable: false, consecutiveMisses: 0);
   }
 
-  /// Spends the round's free hint. Idempotent - calling it again once
-  /// already spent (e.g. a stray double-tap) is a no-op rather than an
-  /// error, since there's nothing left to spend.
   void useHint() {
-    if (!state.hintAvailable) return;
     state = state.copyWith(hintAvailable: false, consecutiveMisses: 0);
   }
 
-  /// Spends the round's free clear-row use. Idempotent, same as
-  /// [useShuffle]/[useHint] - in the Daily Challenge, where
-  /// [GameState.clearRowAvailable] starts and stays `false`, this is
-  /// always a no-op.
   void useClearRow() {
-    if (!state.clearRowAvailable) return;
-    state = state.copyWith(clearRowAvailable: false, consecutiveMisses: 0);
+    state = state.copyWith(consecutiveMisses: 0);
   }
 
   void setPhase(GamePhase phase) {

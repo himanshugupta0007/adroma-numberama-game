@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../config/app_config.dart';
 import 'difficulty.dart';
 import 'player_progress.dart';
+import 'power_up.dart';
 
 /// The real Hive box backing every durable value this app keeps locally -
 /// opened once in `main()` (before [ProviderScope] is even built) and
@@ -422,6 +423,38 @@ class PreferencesService {
   /// [playerId] alone survives - it identifies this install for a future
   /// cloud backend, not in-game progress, so a progress reset shouldn't
   /// change it.
+  /// How many of [type] the player holds. Everyone starts with
+  /// [startingPowerUpCount] of each; a missing key means "never touched".
+  int powerUpCount(PowerUpType type) =>
+      (_box.get('power_up_${type.name}') as int?) ?? startingPowerUpCount;
+
+  Future<void> addPowerUp(PowerUpType type, [int amount = 1]) =>
+      _box.put('power_up_${type.name}', powerUpCount(type) + amount);
+
+  /// Spends one [type]; returns `false` (and changes nothing) if none left.
+  Future<bool> consumePowerUp(PowerUpType type) async {
+    final count = powerUpCount(type);
+    if (count <= 0) return false;
+    await _box.put('power_up_${type.name}', count - 1);
+    return true;
+  }
+
+  /// Level-milestone rewards earned but not yet claimed via the picker.
+  /// Persisted so a reward isn't lost if the app closes before it's chosen.
+  int get pendingPowerUpRewards =>
+      (_box.get('pending_power_up_rewards') as int?) ?? 0;
+
+  Future<void> addPendingPowerUpRewards(int amount) =>
+      _box.put('pending_power_up_rewards', pendingPowerUpRewards + amount);
+
+  /// Claims one pending reward as [type]. No-op if none are pending.
+  Future<void> claimPowerUpReward(PowerUpType type) async {
+    final pending = pendingPowerUpRewards;
+    if (pending <= 0) return;
+    await _box.put('pending_power_up_rewards', pending - 1);
+    await addPowerUp(type);
+  }
+
   Future<void> clearAll() async {
     final id = _box.get(_playerIdKey) as String?;
     await _box.clear();

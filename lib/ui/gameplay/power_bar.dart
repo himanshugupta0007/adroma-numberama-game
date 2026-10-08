@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../game/selection_manager.dart';
 import '../../services/ad_service.dart';
 import '../../state/game_state.dart';
+import '../../state/power_up.dart';
 import '../../state/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -57,10 +58,6 @@ class _PowerBarState extends ConsumerState<PowerBar> {
   @override
   Widget build(BuildContext context) {
     final selectionManager = widget.selectionManager;
-    final shuffleAvailable =
-        ref.watch(gameStateProvider.select((s) => s.shuffleAvailable));
-    final hintAvailable =
-        ref.watch(gameStateProvider.select((s) => s.hintAvailable));
     final clearRowAvailable =
         ref.watch(gameStateProvider.select((s) => s.clearRowAvailable));
 
@@ -97,46 +94,56 @@ class _PowerBarState extends ConsumerState<PowerBar> {
       }
     }
 
-    void handleShuffleTap() {
-      if (shuffleAvailable) {
-        selectionManager.shuffle();
-        ref.read(gameStateProvider.notifier).useShuffle();
-        setState(() => _shuffleUsedTick++);
+    // Counts live in preferences (persisted across rounds); the revision
+    // ticker makes this rebuild when one is spent or earned.
+    ref.watch(preferencesRevisionProvider);
+    final prefs = ref.watch(preferencesServiceProvider);
+    final shuffleCount = prefs.powerUpCount(PowerUpType.shuffle);
+    final hintCount = prefs.powerUpCount(PowerUpType.hint);
+    // Daily Challenge clear-row never uses inventory - always ad-gated.
+    final clearRowCount =
+        clearRowAvailable ? prefs.powerUpCount(PowerUpType.clearRow) : 0;
+
+    // Spends one from inventory if the player has any, otherwise falls back
+    // to the rewarded ad.
+    void use(PowerUpType type, int count, VoidCallback fire, VoidCallback tick,
+        VoidCallback markUsed) {
+      if (count > 0) {
+        prefs.consumePowerUp(type);
+        fire();
+        markUsed();
+        setState(tick);
         return;
       }
       watchAdFor(() {
-        selectionManager.shuffle();
-        setState(() => _shuffleUsedTick++);
+        fire();
+        setState(tick);
       });
     }
 
-    void handleHintTap() {
-      if (hintAvailable) {
-        selectionManager.hint();
-        ref.read(gameStateProvider.notifier).useHint();
-        setState(() => _hintUsedTick++);
-        return;
-      }
-      watchAdFor(() {
-        selectionManager.hint();
-        setState(() => _hintUsedTick++);
-      });
-    }
+    void handleShuffleTap() => use(
+          PowerUpType.shuffle,
+          shuffleCount,
+          selectionManager.shuffle,
+          () => _shuffleUsedTick++,
+          ref.read(gameStateProvider.notifier).useShuffle,
+        );
 
-    void handleClearRowTap() {
-      if (clearRowAvailable) {
-        selectionManager.clearRow();
-        ref.read(gameStateProvider.notifier).useClearRow();
-        setState(() => _clearRowUsedTick++);
-        return;
-      }
-      // In the Daily Challenge this is the only path: clearRowAvailable
-      // starts false and never flips true there.
-      watchAdFor(() {
-        selectionManager.clearRow();
-        setState(() => _clearRowUsedTick++);
-      });
-    }
+    void handleHintTap() => use(
+          PowerUpType.hint,
+          hintCount,
+          selectionManager.hint,
+          () => _hintUsedTick++,
+          ref.read(gameStateProvider.notifier).useHint,
+        );
+
+    void handleClearRowTap() => use(
+          PowerUpType.clearRow,
+          clearRowCount,
+          selectionManager.clearRow,
+          () => _clearRowUsedTick++,
+          ref.read(gameStateProvider.notifier).useClearRow,
+        );
 
     return Container(
       margin: const EdgeInsets.only(top: 16),
@@ -151,8 +158,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
             icon: Icons.shuffle_rounded,
             label: 'Shuffle',
             description: 'Mixes up every number on the board.',
-            count: shuffleAvailable ? 1 : null,
-            adGated: !shuffleAvailable,
+            count: shuffleCount > 0 ? shuffleCount : null,
+            adGated: shuffleCount == 0,
             onTap: handleShuffleTap,
             nudge: _nudgeTick,
             used: _shuffleUsedTick,
@@ -162,8 +169,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
             icon: Icons.lightbulb_outline_rounded,
             label: 'Hint',
             description: 'Flashes one matching pair on the board.',
-            count: hintAvailable ? 1 : null,
-            adGated: !hintAvailable,
+            count: hintCount > 0 ? hintCount : null,
+            adGated: hintCount == 0,
             onTap: handleHintTap,
             nudge: _nudgeTick,
             used: _hintUsedTick,
@@ -173,8 +180,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
             icon: Icons.delete_sweep_rounded,
             label: 'Clear Row',
             description: 'Instantly clears the bottom row.',
-            count: clearRowAvailable ? 1 : null,
-            adGated: !clearRowAvailable,
+            count: clearRowCount > 0 ? clearRowCount : null,
+            adGated: clearRowCount == 0,
             onTap: handleClearRowTap,
             nudge: _nudgeTick,
             used: _clearRowUsedTick,
@@ -308,7 +315,7 @@ class _PowerSlotState extends State<_PowerSlot>
   /// look like that right now" in one message instead of two.
   String get _tooltipMessage {
     final status = widget.count != null
-        ? 'Free to use.'
+        ? '${widget.count} left.'
         : widget.adGated
             ? 'Watch a short ad to use it.'
             : '';

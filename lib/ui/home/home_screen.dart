@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../power_up_reward_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/rate_service.dart';
@@ -52,7 +54,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowRatePrompt());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await maybeShowPowerUpReward(context, ref);
+      _maybeShowRatePrompt();
+    });
   }
 
   /// Shows the "Rate Numberama" prompt if [PreferencesService.
