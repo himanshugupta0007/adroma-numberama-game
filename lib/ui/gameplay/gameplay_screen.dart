@@ -54,6 +54,14 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
   late final NumberamaGame _game;
   bool _navigatedToResults = false;
 
+  /// Set the moment the round ends, to show [_RoundEndOverlay] over the
+  /// board for [_roundEndHold] before moving on to the results screen -
+  /// otherwise the final row landing and the results screen arrive in the
+  /// same instant and the player never actually sees *why* the round ended.
+  _RoundEnd? _roundEnd;
+
+  static const _roundEndHold = Duration(milliseconds: 2000);
+
   @override
   void initState() {
     super.initState();
@@ -146,7 +154,15 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
     final classicRoundNumber =
         widget.isDaily ? 0 : prefs.registerClassicRoundPlayed();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    setState(() {
+      _roundEnd = won
+          ? _RoundEnd.cleared
+          : widget.isDaily
+              ? _RoundEnd.timeUp
+              : _RoundEnd.boardFull;
+    });
+
+    Future.delayed(_roundEndHold, () {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -233,13 +249,15 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
       if (next.phase == GamePhase.lost) _goToResults(next, won: false);
     });
 
-    return PopScope(
+    final screen = PopScope(
       // Always intercepted (system back gesture/button included) so
       // leaving mid-round always goes through the same confirmation as the
       // top bar's back button - see _confirmExit.
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
+        // The round's already over and results are on their way.
+        if (_roundEnd != null) return;
         _confirmExit();
       },
       child: Scaffold(
@@ -289,6 +307,17 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
           ),
         ),
       ),
+    );
+
+    final roundEnd = _roundEnd;
+    if (roundEnd == null) return screen;
+    return Stack(
+      children: [
+        screen,
+        // Covers the whole screen (power bar included) so no stray tap
+        // lands on a round that's already over.
+        Positioned.fill(child: _RoundEndOverlay(roundEnd: roundEnd)),
+      ],
     );
   }
 }
@@ -582,6 +611,121 @@ class _PauseDialog extends StatelessWidget {
           const SizedBox(height: 20),
           GradientButton(label: 'Resume', onPressed: onResume),
         ],
+      ),
+    );
+  }
+}
+
+/// Why a round ended - picks [_RoundEndOverlay]'s wording and colour.
+enum _RoundEnd {
+  boardFull('Board Full!', 'No room left for another row', AppColors.coral,
+      Icons.grid_on_rounded),
+  timeUp("Time's Up!", 'The clock ran out', AppColors.coral,
+      Icons.timer_off_rounded),
+  cleared('Board Cleared!', 'Every tile matched', AppColors.teal,
+      Icons.emoji_events_rounded);
+
+  const _RoundEnd(this.title, this.subtitle, this.color, this.icon);
+
+  final String title;
+  final String subtitle;
+  final Color color;
+  final IconData icon;
+}
+
+/// A short "here's what happened" beat between the last move and the
+/// results screen: the board dims, then a banner pops in naming why the
+/// round ended. Absorbs every tap while it's up.
+class _RoundEndOverlay extends StatefulWidget {
+  const _RoundEndOverlay({required this.roundEnd});
+
+  final _RoundEnd roundEnd;
+
+  @override
+  State<_RoundEndOverlay> createState() => _RoundEndOverlayState();
+}
+
+class _RoundEndOverlayState extends State<_RoundEndOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..forward();
+
+  // Scrim fades in first, so the final board state is still readable for a
+  // beat, then the banner pops in over it.
+  late final Animation<double> _scrim = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0, 0.45, curve: Curves.easeOut),
+  );
+
+  late final Animation<double> _banner = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.3, 1, curve: Curves.elasticOut),
+  );
+
+  late final Animation<double> _bannerFade = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.3, 0.55, curve: Curves.easeOut),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final end = widget.roundEnd;
+    return AbsorbPointer(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) => ColoredBox(
+          color: AppColors.bgDeep.withValues(alpha: 0.7 * _scrim.value),
+          child: Center(
+            child: Opacity(
+              opacity: _bannerFade.value,
+              child: Transform.scale(scale: _banner.value, child: child),
+            ),
+          ),
+        ),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 40),
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 22),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: end.color, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: end.color.withValues(alpha: 0.4),
+                blurRadius: 28,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(end.icon, size: 44, color: end.color),
+              const SizedBox(height: 12),
+              Text(
+                end.title,
+                style: AppTextStyles.display(26, color: AppColors.textHi),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                end.subtitle,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.display(
+                  13,
+                  weight: FontWeight.w500,
+                  color: AppColors.textMid,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -32,7 +32,7 @@ enum PowerUpType {
 
 /// Every [levelsPerPowerUpReward]th level the player reaches earns one
 /// power-up of their choice.
-const int levelsPerPowerUpReward = 10;
+const int levelsPerPowerUpReward = 5;
 
 /// Power-ups every player owns of each type before earning any.
 const int startingPowerUpCount = 1;

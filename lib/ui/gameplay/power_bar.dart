@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../config/app_config.dart';
 import '../../game/selection_manager.dart';
 import '../../services/ad_service.dart';
 import '../../state/game_state.dart';
@@ -10,10 +11,11 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/message_dialog.dart';
 
-/// The power-up strip: shuffle, hint, and clear-row. Shuffle and hint each
-/// get one free use per round, ad-gated after; clear-row follows the same
-/// rule in Classic but is ad-gated from the very first frame in the Daily
-/// Challenge, with no free use at all (see [GameState.clearRowAvailable]).
+/// The power-up strip: shuffle, hint, and clear-row. Each use spends one
+/// from the persisted inventory ([PreferencesService.powerUpCount]); once a
+/// slot hits 0 it's ad-gated, or disabled entirely while
+/// [AppConfig.adsAndPurchasesEnabled] is off. Clear-row never uses inventory
+/// in the Daily Challenge (see [GameState.clearRowAvailable]).
 /// All three slots also pulse a "try me" nudge every 3 consecutive invalid
 /// taps, in case the player's stuck and hasn't noticed them.
 class PowerBar extends ConsumerStatefulWidget {
@@ -104,8 +106,13 @@ class _PowerBarState extends ConsumerState<PowerBar> {
     final clearRowCount =
         clearRowAvailable ? prefs.powerUpCount(PowerUpType.clearRow) : 0;
 
+    // With ads off there's no way to earn another use, so an empty slot is
+    // disabled outright rather than offering an ad (or a free grant).
+    const adsEnabled = AppConfig.adsAndPurchasesEnabled;
+
     // Spends one from inventory if the player has any, otherwise falls back
-    // to the rewarded ad.
+    // to the rewarded ad. Never reached for an empty slot while ads are off -
+    // [_PowerSlot.onTap] is null then.
     void use(PowerUpType type, int count, VoidCallback fire, VoidCallback tick,
         VoidCallback markUsed) {
       if (count > 0) {
@@ -159,8 +166,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
             label: 'Shuffle',
             description: 'Mixes up every number on the board.',
             count: shuffleCount > 0 ? shuffleCount : null,
-            adGated: shuffleCount == 0,
-            onTap: handleShuffleTap,
+            adGated: adsEnabled && shuffleCount == 0,
+            onTap: shuffleCount > 0 || adsEnabled ? handleShuffleTap : null,
             nudge: _nudgeTick,
             used: _shuffleUsedTick,
           ),
@@ -170,8 +177,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
             label: 'Hint',
             description: 'Flashes one matching pair on the board.',
             count: hintCount > 0 ? hintCount : null,
-            adGated: hintCount == 0,
-            onTap: handleHintTap,
+            adGated: adsEnabled && hintCount == 0,
+            onTap: hintCount > 0 || adsEnabled ? handleHintTap : null,
             nudge: _nudgeTick,
             used: _hintUsedTick,
           ),
@@ -181,8 +188,8 @@ class _PowerBarState extends ConsumerState<PowerBar> {
             label: 'Clear Row',
             description: 'Instantly clears the bottom row.',
             count: clearRowCount > 0 ? clearRowCount : null,
-            adGated: clearRowCount == 0,
-            onTap: handleClearRowTap,
+            adGated: adsEnabled && clearRowCount == 0,
+            onTap: clearRowCount > 0 || adsEnabled ? handleClearRowTap : null,
             nudge: _nudgeTick,
             used: _clearRowUsedTick,
           ),
@@ -318,10 +325,8 @@ class _PowerSlotState extends State<_PowerSlot>
         ? '${widget.count} left.'
         : widget.adGated
             ? 'Watch a short ad to use it.'
-            : '';
-    return status.isEmpty
-        ? widget.description
-        : '${widget.description} $status';
+            : 'None left.';
+    return '${widget.description} $status';
   }
 
   /// Slot box size - large enough that the icon reads clearly at a glance

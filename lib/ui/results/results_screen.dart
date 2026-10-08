@@ -113,13 +113,32 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
 
   bool _isSharing = false;
 
+  /// End-of-round popups (level-up, power-up reward, interstitial) are held
+  /// back until the results themselves have had a moment on screen, then
+  /// shown one at a time with a short gap between each - landing all at
+  /// once on arrival was overwhelming.
+  bool _celebrationsActive = false;
+
+  static const _settleDelay = Duration(milliseconds: 900);
+  static const _popupGap = Duration(milliseconds: 450);
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await maybeShowPowerUpReward(context, ref);
-      _maybeShowInterstitial();
+    Future.delayed(_settleDelay, () {
+      if (mounted) setState(() => _celebrationsActive = true);
     });
+  }
+
+  /// Runs once the level-up celebration (if any) has been dismissed.
+  Future<void> _afterCelebrations() async {
+    if (ref.read(preferencesServiceProvider).pendingPowerUpRewards > 0) {
+      await Future.delayed(_popupGap);
+      if (!mounted) return;
+      await maybeShowPowerUpReward(context, ref);
+    }
+    await Future.delayed(_popupGap);
+    _maybeShowInterstitial();
   }
 
   /// Shows the preloaded interstitial roughly every third Classic round -
@@ -359,8 +378,13 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
         // whole screen (not just a top strip) so the confetti burst has
         // room to fall - AchievementToast ignores pointer events itself,
         // so this never blocks taps on the content underneath.
-        const Positioned.fill(
-          child: SafeArea(child: AchievementToast()),
+        Positioned.fill(
+          child: SafeArea(
+            child: AchievementToast(
+              active: _celebrationsActive,
+              onDone: _afterCelebrations,
+            ),
+          ),
         ),
       ],
     );

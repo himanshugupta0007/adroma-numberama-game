@@ -24,7 +24,16 @@ import '../widgets/gradient_button.dart';
 /// so the celebration shows once play is over instead of interrupting
 /// active gameplay.
 class AchievementToast extends ConsumerStatefulWidget {
-  const AchievementToast({super.key});
+  const AchievementToast({super.key, this.active = true, this.onDone});
+
+  /// Nothing is shown until this is `true`, so the host screen can let
+  /// itself settle first instead of opening on a celebration.
+  final bool active;
+
+  /// Called once, after [active] turns on, as soon as the queue is empty -
+  /// immediately if nothing was queued, otherwise once the last dialog is
+  /// dismissed - so the host can sequence whatever comes next after it.
+  final VoidCallback? onDone;
 
   @override
   ConsumerState<AchievementToast> createState() => _AchievementToastState();
@@ -59,6 +68,8 @@ class _AchievementToastState extends ConsumerState<AchievementToast> {
   /// burst "finish") is what actually disposes that AnimationController -
   /// see `_ConfettiWidgetState.dispose()`.
   bool _confettiActive = false;
+
+  bool _reportedDone = false;
 
   @override
   void dispose() {
@@ -106,6 +117,13 @@ class _AchievementToastState extends ConsumerState<AchievementToast> {
     final front = ref.watch(
       achievementQueueProvider.select((queue) => queue.isEmpty ? null : queue.first),
     );
+    if (!widget.active) return const SizedBox.shrink();
+    if (front == null && _shown == null && !_reportedDone) {
+      _reportedDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onDone?.call();
+      });
+    }
     if (front != null && front != _shown) {
       _shown = front;
       // showDialog can't run synchronously mid-build, so it's deferred to
