@@ -55,12 +55,13 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
   bool _navigatedToResults = false;
 
   /// Set the moment the round ends, to show [_RoundEndOverlay] over the
-  /// board for [_roundEndHold] before moving on to the results screen -
-  /// otherwise the final row landing and the results screen arrive in the
-  /// same instant and the player never actually sees *why* the round ended.
+  /// board until the player taps its OK - otherwise the final row landing
+  /// and the results screen arrive in the same instant and the player never
+  /// actually sees *why* the round ended.
   _RoundEnd? _roundEnd;
 
-  static const _roundEndHold = Duration(milliseconds: 2000);
+  /// Opens the results screen; set by [_goToResults], run by the overlay's OK.
+  VoidCallback? _openResults;
 
   @override
   void initState() {
@@ -162,7 +163,7 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
               : _RoundEnd.boardFull;
     });
 
-    Future.delayed(_roundEndHold, () {
+    _openResults = () {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -184,7 +185,7 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
           ),
         ),
       );
-    });
+    };
   }
 
   /// A simple, tunable heuristic for the Daily Challenge's star rating: 0
@@ -316,12 +317,26 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
         screen,
         // Covers the whole screen (power bar included) so no stray tap
         // lands on a round that's already over.
-        Positioned.fill(child: _RoundEndOverlay(roundEnd: roundEnd)),
+        Positioned.fill(
+          // Sits above the Scaffold, so it needs its own Material for text
+          // styling - without one Flutter draws the yellow debug underline.
+          child: Material(
+            type: MaterialType.transparency,
+            child: _RoundEndOverlay(
+              roundEnd: roundEnd,
+              // Cleared after the first tap so a double-tap can't push twice.
+              onOk: () {
+                final open = _openResults;
+                _openResults = null;
+                open?.call();
+              },
+            ),
+          ),
+        ),
       ],
     );
   }
 }
-
 
 class _TopBar extends StatelessWidget {
   const _TopBar({
@@ -449,7 +464,8 @@ class _ScoreRow extends ConsumerWidget {
         // rebuilds exactly when totalXp does.
         if (!isDaily)
           _LevelPill(
-            level: calculateLevel(ref.watch(preferencesServiceProvider).totalXp),
+            level:
+                calculateLevel(ref.watch(preferencesServiceProvider).totalXp),
           ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -635,11 +651,13 @@ enum _RoundEnd {
 
 /// A short "here's what happened" beat between the last move and the
 /// results screen: the board dims, then a banner pops in naming why the
-/// round ended. Absorbs every tap while it's up.
+/// round ended. Blocks the board underneath; only its OK button (which
+/// moves on to the results screen) is tappable.
 class _RoundEndOverlay extends StatefulWidget {
-  const _RoundEndOverlay({required this.roundEnd});
+  const _RoundEndOverlay({required this.roundEnd, required this.onOk});
 
   final _RoundEnd roundEnd;
+  final VoidCallback onOk;
 
   @override
   State<_RoundEndOverlay> createState() => _RoundEndOverlayState();
@@ -678,7 +696,9 @@ class _RoundEndOverlayState extends State<_RoundEndOverlay>
   @override
   Widget build(BuildContext context) {
     final end = widget.roundEnd;
-    return AbsorbPointer(
+    // An opaque ColoredBox swallows taps meant for the board below.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, child) => ColoredBox(
@@ -722,6 +742,11 @@ class _RoundEndOverlayState extends State<_RoundEndOverlay>
                   weight: FontWeight.w500,
                   color: AppColors.textMid,
                 ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: GradientButton(label: 'OK', onPressed: widget.onOk),
               ),
             ],
           ),
