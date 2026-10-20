@@ -1,9 +1,6 @@
-import 'dart:io';
-
 import 'package:flame/game.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 
 import 'package:numberama/game/numberama_game.dart';
 import 'package:numberama/game/tile_component.dart';
@@ -14,6 +11,8 @@ import 'package:numberama/state/preferences_service.dart';
 import 'package:numberama/ui/daily/daily_screen.dart';
 import 'package:numberama/ui/results/results_screen.dart';
 import 'package:numberama/widgets/gradient_button.dart';
+
+import '../helpers/test_prefs_box.dart';
 
 List<TileComponent>? _findValidPair(List<TileComponent> tiles) {
   for (var i = 0; i < tiles.length; i++) {
@@ -34,8 +33,6 @@ Future<void> _pumpFrames(WidgetTester tester, {int frames = 30}) async {
   }
 }
 
-int _testBoxCounter = 0;
-
 /// Boots the app (with How to Play already dismissed, so it doesn't block
 /// taps) and returns the container so tests can read/seed the Hive box
 /// directly.
@@ -43,27 +40,20 @@ Future<ProviderContainer> _bootApp(
   WidgetTester tester, {
   bool hasPlayedDailyToday = false,
 }) async {
-  final tempDir = await Directory.systemTemp.createTemp('numberama_test_');
-  Hive.init(tempDir.path);
-  final box = await Hive.openBox('prefs_${_testBoxCounter++}');
-  addTearDown(() async {
-    await box.close();
-    await tempDir.delete(recursive: true);
+  final now = DateTime.now();
+  final box = await openTestPrefsBox(initial: {
+    'has_seen_how_to_play': true,
+    'has_seen_onboarding': true,
+    if (hasPlayedDailyToday) ...{
+      'last_daily_played_date':
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+              '${now.day.toString().padLeft(2, '0')}',
+      // The actual replay gate is the current 10-hour cycle (see
+      // PreferencesService.hasPlayedCurrentDailyCycle), not the calendar-day
+      // key above (which only feeds the streak).
+      'last_daily_played_cycle': dailyCycleIndex(now),
+    },
   });
-  await box.put('has_seen_how_to_play', true);
-  await box.put('has_seen_onboarding', true);
-  if (hasPlayedDailyToday) {
-    final now = DateTime.now();
-    await box.put(
-      'last_daily_played_date',
-      '${now.year}-${now.month.toString().padLeft(2, '0')}-'
-      '${now.day.toString().padLeft(2, '0')}',
-    );
-    // The actual replay gate is the current 10-hour cycle (see
-    // PreferencesService.hasPlayedCurrentDailyCycle), not the calendar-day
-    // key above (which only feeds the streak).
-    await box.put('last_daily_played_cycle', dailyCycleIndex(now));
-  }
 
   final container = ProviderContainer(
     overrides: [preferencesBoxProvider.overrideWithValue(box)],
@@ -141,18 +131,29 @@ void main() {
     container.read(gameStateProvider.notifier).setPhase(GamePhase.won);
     await _pumpFrames(tester, frames: 40);
 
+    // The round-end card comes first; its OK opens the results screen.
+    await tester.tap(find.widgetWithText(GradientButton, 'OK'));
+    await _pumpFrames(tester, frames: 40);
+
     expect(find.byType(ResultsScreen), findsOneWidget);
     final results = tester.widget<ResultsScreen>(find.byType(ResultsScreen));
     expect(results.isDaily, isTrue);
     expect(find.widgetWithText(GradientButton, 'Done for today'), findsOneWidget);
 
     // "Done for today" pops back to DailyScreen, which should now be locked.
-    await tester.tap(find.widgetWithText(GradientButton, 'Done for today'));
+    final doneButton = find.widgetWithText(GradientButton, 'Done for today');
+    await tester.ensureVisible(doneButton);
+    await tester.pump();
+    await tester.tap(doneButton);
     await _pumpFrames(tester, frames: 40);
 
     expect(find.byType(DailyScreen), findsOneWidget);
     expect(find.widgetWithText(GradientButton, "Start today's board"),
         findsNothing);
     expect(find.textContaining('come back in'), findsOneWidget);
+
+    // Let ResultsScreen's (mounted-guarded) celebration delay run out, so
+    // no timer is left pending when the test ends.
+    await tester.pump(const Duration(seconds: 1));
   });
 }

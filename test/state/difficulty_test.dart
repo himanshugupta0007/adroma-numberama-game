@@ -9,7 +9,13 @@ void main() {
     });
 
     test('stays the same within a single 10-hour cycle', () {
-      final start = DateTime.utc(2026, 7, 14);
+      // Cycles are counted from the Unix epoch, not from midnight, so start
+      // at the real beginning of a cycle rather than at a calendar day.
+      final cycle = dailyCycleIndex(DateTime.utc(2026, 7, 14));
+      final start = DateTime.fromMillisecondsSinceEpoch(
+        cycle * dailyCycleDuration.inMilliseconds,
+        isUtc: true,
+      );
       expect(Difficulty.forDate(start),
           Difficulty.forDate(start.add(const Duration(hours: 9))));
     });
@@ -43,12 +49,12 @@ void main() {
       expect(Difficulty.hard.maxTileValue, 10);
     });
 
-    test('Daily Rush countdown is shorter on harder tiers', () {
-      expect(Difficulty.hard.rushDuration, const Duration(seconds: 10));
-      expect(Difficulty.medium.rushDuration, const Duration(seconds: 12));
-      expect(Difficulty.easy.rushDuration, const Duration(seconds: 15));
-      expect(Difficulty.hard.rushDuration, lessThan(Difficulty.medium.rushDuration));
-      expect(Difficulty.medium.rushDuration, lessThan(Difficulty.easy.rushDuration));
+    test('Daily Rush countdown is a fixed 60 seconds on every tier', () {
+      // Harder tiers get their pressure from pair distance and sum-pair
+      // chance instead - see Difficulty.rushDuration.
+      for (final tier in Difficulty.values) {
+        expect(tier.rushDuration, const Duration(seconds: 60));
+      }
     });
   });
 }

@@ -378,11 +378,11 @@ class PreferencesService {
   /// [PowerBar]) checks this first and skips straight to the free/granted
   /// outcome instead of calling `AdService` at all.
   ///
-  /// Also `true` whenever [AppConfig.adsAndPurchasesEnabled] is off, so
+  /// Also `true` whenever [AppConfig.adsEnabled] is off, so
   /// every one of those call sites goes straight to the free outcome
   /// without any per-site changes.
   bool get removeAdsPurchased =>
-      !AppConfig.adsAndPurchasesEnabled ||
+      !AppConfig.adsEnabled ||
       ((_box.get(_removeAdsPurchasedKey) as bool?) ?? false);
 
   Future<void> setRemoveAdsPurchased(bool value) =>

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner_widget.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
+import '../../widgets/max_width_box.dart';
 import '../../widgets/message_dialog.dart';
 import '../../widgets/wordmark_icon.dart';
 import '../achievement_toast.dart';
@@ -122,12 +124,22 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
   static const _settleDelay = Duration(milliseconds: 900);
   static const _popupGap = Duration(milliseconds: 450);
 
+  /// Cancelled in [dispose] so leaving the screen early never leaves it
+  /// scheduled.
+  Timer? _settleTimer;
+
   @override
   void initState() {
     super.initState();
-    Future.delayed(_settleDelay, () {
+    _settleTimer = Timer(_settleDelay, () {
       if (mounted) setState(() => _celebrationsActive = true);
     });
+  }
+
+  @override
+  void dispose() {
+    _settleTimer?.cancel();
+    super.dispose();
   }
 
   /// Runs once the level-up celebration (if any) has been dismissed.
@@ -166,8 +178,7 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
       // once it lands in a social app's own preview/crop, which typically
       // upscales rather than shrinks a phone-sized screenshot.
       final image = await boundary?.toImage(pixelRatio: 3);
-      final byteData =
-          await image?.toByteData(format: ui.ImageByteFormat.png);
+      final byteData = await image?.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw StateError('card not ready');
       final bytes = byteData.buffer.asUint8List();
 
@@ -204,171 +215,177 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
     return Stack(
       children: [
         Scaffold(
-      body: GraphPaperBackground(
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        // Always returns all the way to Home regardless of how
-                        // deep the stack is (Classic: Home -> Results; Daily:
-                        // Home -> Daily -> Results) - "Done for today"/"Play
-                        // again" below cover the in-flow paths, this is the one
-                        // way out of the results screen entirely.
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: IconButton(
-                            onPressed: () => Navigator.of(context)
-                                .popUntil((route) => route.isFirst),
-                            icon: const Icon(Icons.home_rounded,
-                                color: AppColors.textLow),
-                            tooltip: 'Back to Home',
-                          ),
-                        ),
-                        Text(
-                          widget.won
-                              ? 'ROUND COMPLETE'
-                              : (widget.isDaily
-                                  ? "TIME'S UP"
-                                  : 'BOARD FULL'),
-                          style: AppTextStyles.caption,
-                        ),
-                        const SizedBox(height: 8),
-                        Text('${widget.score}',
-                            style: AppTextStyles.mono(46,
-                                color: AppColors.textHi)),
-                        const SizedBox(height: 8),
-                        // A new best takes priority over the loss badge - getting
-                        // stuck is still worth celebrating if the score that got
-                        // you there beat everything before it. A win with no new
-                        // best shows neither badge.
-                        if (widget.isNewBest)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.teal.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text('NEW BEST',
-                                style: AppTextStyles.mono(10.5,
-                                    weight: FontWeight.w600,
-                                    color: AppColors.teal)),
-                          )
-                        else if (!widget.won)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.coral.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                                widget.isDaily
-                                    ? 'OUT OF TIME'
-                                    : 'NO MORE ROOM',
-                                style: AppTextStyles.mono(10.5,
-                                    weight: FontWeight.w600,
-                                    color: AppColors.coral)),
-                          ),
-                        if (widget.isDaily) ...[
-                          const SizedBox(height: 10),
-                          _StarsRow(stars: widget.dailyStars),
-                        ],
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            // Same "never show x0" rule as the in-round badge -
-                            // a round with zero pairs cleared still reads "x1".
-                            Expanded(
-                              child: _StatChip(
-                                value:
-                                    'x${widget.bestCombo == 0 ? 1 : widget.bestCombo}',
-                                label: 'Combo',
+          body: GraphPaperBackground(
+            child: SafeArea(
+              child: MaxWidthBox(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              // Always returns all the way to Home regardless of how
+                              // deep the stack is (Classic: Home -> Results; Daily:
+                              // Home -> Daily -> Results) - "Done for today"/"Play
+                              // again" below cover the in-flow paths, this is the one
+                              // way out of the results screen entirely.
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: IconButton(
+                                  onPressed: () => Navigator.of(context)
+                                      .popUntil((route) => route.isFirst),
+                                  icon: const Icon(Icons.home_rounded,
+                                      color: AppColors.textLow),
+                                  tooltip: 'Back to Home',
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                                child: _StatChip(
-                                    value: '${widget.pairs}', label: 'Pairs')),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _StatChip(
-                                value:
-                                    ResultsScreen._formatElapsed(widget.elapsed),
-                                label: 'Time',
+                              Text(
+                                widget.won
+                                    ? 'ROUND COMPLETE'
+                                    : (widget.isDaily
+                                        ? "TIME'S UP"
+                                        : 'BOARD FULL'),
+                                style: AppTextStyles.caption,
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        _StreakRow(
-                            days: streak,
-                            justExtended: widget.streakJustExtended),
-                        const SizedBox(height: 20),
-                        RepaintBoundary(
-                          key: _shareCardKey,
-                          child: _ShareCard(
-                            attemptHistory: widget.attemptHistory,
-                            score: widget.score,
-                            isDaily: widget.isDaily,
-                            difficulty: widget.difficulty,
-                            dailyStars: widget.dailyStars,
-                            classicRoundNumber: widget.classicRoundNumber,
+                              const SizedBox(height: 8),
+                              Text('${widget.score}',
+                                  style: AppTextStyles.mono(46,
+                                      color: AppColors.textHi)),
+                              const SizedBox(height: 8),
+                              // A new best takes priority over the loss badge - getting
+                              // stuck is still worth celebrating if the score that got
+                              // you there beat everything before it. A win with no new
+                              // best shows neither badge.
+                              if (widget.isNewBest)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        AppColors.teal.withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text('NEW BEST',
+                                      style: AppTextStyles.mono(10.5,
+                                          weight: FontWeight.w600,
+                                          color: AppColors.teal)),
+                                )
+                              else if (!widget.won)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        AppColors.coral.withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                      widget.isDaily
+                                          ? 'OUT OF TIME'
+                                          : 'NO MORE ROOM',
+                                      style: AppTextStyles.mono(10.5,
+                                          weight: FontWeight.w600,
+                                          color: AppColors.coral)),
+                                ),
+                              if (widget.isDaily) ...[
+                                const SizedBox(height: 10),
+                                _StarsRow(stars: widget.dailyStars),
+                              ],
+                              const SizedBox(height: 20),
+                              Row(
+                                children: [
+                                  // Same "never show x0" rule as the in-round badge -
+                                  // a round with zero pairs cleared still reads "x1".
+                                  Expanded(
+                                    child: _StatChip(
+                                      value:
+                                          'x${widget.bestCombo == 0 ? 1 : widget.bestCombo}',
+                                      label: 'Combo',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                      child: _StatChip(
+                                          value: '${widget.pairs}',
+                                          label: 'Pairs')),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _StatChip(
+                                      value: ResultsScreen._formatElapsed(
+                                          widget.elapsed),
+                                      label: 'Time',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              _StreakRow(
+                                  days: streak,
+                                  justExtended: widget.streakJustExtended),
+                              const SizedBox(height: 20),
+                              RepaintBoundary(
+                                key: _shareCardKey,
+                                child: _ShareCard(
+                                  attemptHistory: widget.attemptHistory,
+                                  score: widget.score,
+                                  isDaily: widget.isDaily,
+                                  difficulty: widget.difficulty,
+                                  dailyStars: widget.dailyStars,
+                                  classicRoundNumber: widget.classicRoundNumber,
+                                ),
+                              ),
+                              const SizedBox(height: 22),
+                              GradientButton(
+                                // The daily board is one attempt only - there's nothing
+                                // to replay, so this just returns to the Daily
+                                // Challenge screen instead of starting a fresh round.
+                                label: widget.isDaily
+                                    ? 'Done for today'
+                                    : 'Play again',
+                                onPressed: () {
+                                  if (widget.isDaily) {
+                                    Navigator.pop(context);
+                                    return;
+                                  }
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          GameplayScreen(mode: widget.mode),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _isSharing ? null : _shareResult,
+                                  child: _isSharing
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2),
+                                        )
+                                      : const Text('Share result'),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 22),
-                        GradientButton(
-                          // The daily board is one attempt only - there's nothing
-                          // to replay, so this just returns to the Daily
-                          // Challenge screen instead of starting a fresh round.
-                          label: widget.isDaily
-                              ? 'Done for today'
-                              : 'Play again',
-                          onPressed: () {
-                            if (widget.isDaily) {
-                              Navigator.pop(context);
-                              return;
-                            }
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    GameplayScreen(mode: widget.mode),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _isSharing ? null : _shareResult,
-                            child: _isSharing
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : const Text('Share result'),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const Center(child: AdBannerWidget()),
+                      const BottomNavBar(activeTab: HomeTab.results),
+                    ],
                   ),
                 ),
-                const Center(child: AdBannerWidget()),
-                const BottomNavBar(activeTab: HomeTab.results),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
         ),
         // Shown once the round is fully over rather than mid-play, so a
         // level-up doesn't interrupt active gameplay - only ever populated

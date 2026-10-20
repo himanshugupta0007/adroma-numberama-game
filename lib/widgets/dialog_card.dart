@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import 'max_width_box.dart';
 
 /// Shared dark rounded card shell for every full-screen dialog in the
 /// gameplay flow (leave/pause confirmations, how-to-play) - the default
@@ -15,13 +16,17 @@ class DialogCard extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+      // Keeps dialogs card-sized on tablets instead of nearly full-width.
+      constraints: const BoxConstraints(maxWidth: MaxWidthBox.dialog),
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: child,
+        // Scrolls instead of overflowing when the content is taller than
+        // the screen allows (short phones, large font settings).
+        child: SingleChildScrollView(child: child),
       ),
     );
   }

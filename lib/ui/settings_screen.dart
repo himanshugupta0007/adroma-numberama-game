@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -5,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config/app_config.dart';
+import '../config/feature_flags.dart';
 import '../services/ad_service.dart';
 import '../services/notification_service.dart';
 import '../services/purchase_service.dart';
@@ -17,6 +20,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/dialog_card.dart';
 import '../widgets/graph_paper_background.dart';
 import '../widgets/message_dialog.dart';
+import '../widgets/max_width_box.dart';
 import '../widgets/settings_row.dart';
 import 'home/bottom_nav_bar.dart';
 import 'onboarding/onboarding_screen.dart';
@@ -39,6 +43,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isSharingApp = false;
+  bool _isRestoring = false;
+  StreamSubscription<void>? _purchaseErrorSub;
 
   /// Null until [PackageInfo.fromPlatform] resolves - the footer just shows
   /// nothing for that one frame rather than a hardcoded placeholder version.
@@ -48,6 +54,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     _loadAppVersion();
+    if (AppConfig.adsEnabled && FeatureFlags.iapEnabled) {
+      final purchases = PurchaseService.instance;
+      purchases.removeAdsProduct.addListener(_onProductLoaded);
+      purchases.loadProduct();
+      _purchaseErrorSub = purchases.purchaseErrors.listen((_) {
+        if (!mounted) return;
+        showMessageDialog(
+          context,
+          "Purchase couldn't be completed. Please try again.",
+          isError: true,
+        );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    if (AppConfig.adsEnabled && FeatureFlags.iapEnabled) {
+      PurchaseService.instance.removeAdsProduct
+          .removeListener(_onProductLoaded);
+    }
+    _purchaseErrorSub?.cancel();
+    super.dispose();
+  }
+
+  void _onProductLoaded() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadAppVersion() async {
@@ -110,13 +143,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await PurchaseService.instance.buyRemoveAds();
   }
 
-  Future<void> _restorePurchases(BuildContext context, WidgetRef ref) async {
-    await PurchaseService.instance.restorePurchases();
+  Future<void> _restorePurchases(BuildContext context) async {
+    if (_isRestoring) return;
+    setState(() => _isRestoring = true);
+    final result = await PurchaseService.instance.restorePurchases();
+    if (!mounted) return;
+    setState(() => _isRestoring = false);
     if (!context.mounted) return;
-    final restored = ref.read(preferencesServiceProvider).removeAdsPurchased;
     await showMessageDialog(
       context,
-      restored ? 'Purchase restored.' : 'No previous purchase found.',
+      switch (result) {
+        RestoreResult.restored => 'Purchase restored.',
+        RestoreResult.notFound => 'No previous purchase found.',
+        RestoreResult.unavailable =>
+          "Couldn't reach the store. Check your connection and try again.",
+      },
+      isError: result == RestoreResult.unavailable,
     );
   }
 
@@ -199,202 +241,219 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.watch(preferencesRevisionProvider);
     final removeAdsPurchased =
         ref.read(preferencesServiceProvider).removeAdsPurchased;
-    final removeAdsProduct = PurchaseService.instance.removeAdsProduct;
+    final removeAdsProduct = PurchaseService.instance.removeAdsProduct.value;
 
     return Scaffold(
       body: GraphPaperBackground(
         child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 4, 16, 4),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.chevron_left_rounded,
-                          color: AppColors.textHi),
-                    ),
-                    Text('Settings', style: AppTextStyles.heading),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: MaxWidthBox(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 4, 16, 4),
+                  child: Row(
                     children: [
-                      const SettingsSectionHeader('Sound & Feedback'),
-                      SettingsSectionCard(
-                        rows: [
-                          SettingsRow(
-                            label: 'Sound Effects',
-                            trailing: _switch(
-                              settings.soundEnabled,
-                              settingsNotifier.setSoundEnabled,
-                            ),
-                          ),
-                          SettingsRow(
-                            label: 'Haptic Feedback',
-                            trailing: _switch(
-                              settings.hapticsEnabled,
-                              settingsNotifier.setHapticsEnabled,
-                            ),
-                          ),
-                          SettingsRow(
-                            label: 'Reduce Motion',
-                            subtitle: 'Simplifies animations',
-                            trailing: _switch(
-                              settings.reduceMotionEnabled,
-                              settingsNotifier.setReduceMotionEnabled,
-                            ),
-                          ),
-                        ],
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.chevron_left_rounded,
+                            color: AppColors.textHi),
                       ),
-                      const SizedBox(height: 24),
-                      const SettingsSectionHeader('Notifications'),
-                      SettingsSectionCard(
-                        rows: [
-                          SettingsRow(
-                            label: 'Streak Reminder',
-                            subtitle: 'Get notified before your streak resets',
-                            trailing: _switch(
-                              settings.dailyReminderEnabled,
-                              (value) =>
-                                  _handleReminderToggle(context, ref, value),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (AppConfig.adsAndPurchasesEnabled) ...[
-                        const SizedBox(height: 24),
-                        const SettingsSectionHeader('Purchases & Ads'),
-                        SettingsSectionCard(
-                          rows: [
-                            SettingsRow(
-                              label: 'Remove Ads',
-                              enabled: !removeAdsPurchased &&
-                                  removeAdsProduct != null,
-                              trailing: removeAdsPurchased
-                                  ? const _OwnedTag()
-                                  : Text(
-                                      removeAdsProduct?.price ?? '···',
-                                      style: AppTextStyles.display(
-                                        13,
-                                        weight: FontWeight.w600,
-                                        color: AppColors.textHi,
-                                      ),
-                                    ),
-                              onTap: removeAdsPurchased
-                                  ? null
-                                  : () => _buyRemoveAds(context),
-                            ),
-                            SettingsRow(
-                              label: 'Restore Purchases',
-                              trailing: _chevron(),
-                              onTap: () => _restorePurchases(context, ref),
-                            ),
-                            SettingsRow(
-                              label: 'Manage Ad Preferences',
-                              trailing: _chevron(),
-                              // A no-op for players outside the EEA/UK, whose
-                              // region never required a consent form in the
-                              // first place - see AdService.
-                              // showPrivacyOptionsForm. Left visible
-                              // unconditionally rather than only for players
-                              // it applies to, since a GDPR consent form
-                              // itself only reaches EEA/UK players.
-                              onTap: () =>
-                                  AdService.instance.showPrivacyOptionsForm(),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      const SettingsSectionHeader('Data'),
-                      SettingsSectionCard(
-                        rows: [
-                          SettingsRow(
-                            label: 'Reset Progress',
-                            labelColor: AppColors.coral,
-                            trailing: Icon(Icons.chevron_right_rounded,
-                                color: AppColors.coral.withValues(alpha: 0.7)),
-                            onTap: () => _confirmResetProgress(context, ref),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      const SettingsSectionHeader('Share'),
-                      const SizedBox(height: 12),
-                      SettingsSectionCard(
-                        rows: [
-                          SettingsRow(
-                            label: 'Share Pairoma',
-                            subtitle: 'Invite friends to play',
-                            trailing: _isSharingApp
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : _chevron(),
-                            onTap: _isSharingApp ? null : _shareApp,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      const SettingsSectionHeader('About'),
-                      SettingsSectionCard(
-                        rows: [
-                          SettingsRow(
-                            label: 'Replay Tutorial',
-                            trailing: _chevron(),
-                            onTap: () => _replayTutorial(context),
-                          ),
-                          SettingsRow(
-                            label: 'Rate Pairoma',
-                            trailing: _chevron(),
-                            onTap: () => _rateApp(ref),
-                          ),
-                          SettingsRow(
-                            label: 'Send Feedback',
-                            trailing: _chevron(),
-                            onTap: () => _sendFeedback(context),
-                          ),
-                          // TODO(cross-promo): "More Games" row hidden until
-                          // there's a games-list screen (and other games) to
-                          // point it at - see doc/remaining-work.md.
-                          SettingsRow(
-                            label: 'Privacy Policy',
-                            trailing: _chevron(),
-                            onTap: () => _openPrivacyPolicy(context),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-                      Center(
-                        child: Text(
-                          _appVersion == null
-                              ? 'Adhroma Games'
-                              : 'Adhroma Games · $_appVersion',
-                          style: AppTextStyles.mono(
-                            10.5,
-                            weight: FontWeight.w500,
-                            color: AppColors.textLow,
-                          ),
-                        ),
-                      ),
+                      Text('Settings', style: AppTextStyles.heading),
                     ],
                   ),
                 ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: BottomNavBar(activeTab: HomeTab.settings),
-              ),
-            ],
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SettingsSectionHeader('Sound & Feedback'),
+                        SettingsSectionCard(
+                          rows: [
+                            SettingsRow(
+                              label: 'Sound Effects',
+                              trailing: _switch(
+                                settings.soundEnabled,
+                                settingsNotifier.setSoundEnabled,
+                              ),
+                            ),
+                            SettingsRow(
+                              label: 'Haptic Feedback',
+                              trailing: _switch(
+                                settings.hapticsEnabled,
+                                settingsNotifier.setHapticsEnabled,
+                              ),
+                            ),
+                            SettingsRow(
+                              label: 'Reduce Motion',
+                              subtitle: 'Simplifies animations',
+                              trailing: _switch(
+                                settings.reduceMotionEnabled,
+                                settingsNotifier.setReduceMotionEnabled,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        const SettingsSectionHeader('Notifications'),
+                        SettingsSectionCard(
+                          rows: [
+                            SettingsRow(
+                              label: 'Streak Reminder',
+                              subtitle:
+                                  'Get notified before your streak resets',
+                              trailing: _switch(
+                                settings.dailyReminderEnabled,
+                                (value) =>
+                                    _handleReminderToggle(context, ref, value),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (AppConfig.adsEnabled) ...[
+                          const SizedBox(height: 24),
+                          const SettingsSectionHeader(FeatureFlags.iapEnabled
+                              ? 'Purchases & Ads'
+                              : 'Ads'),
+                          SettingsSectionCard(
+                            rows: [
+                              if (FeatureFlags.iapEnabled) ...[
+                                SettingsRow(
+                                  label: 'Remove Ads',
+                                  enabled: !removeAdsPurchased &&
+                                      removeAdsProduct != null,
+                                  trailing: removeAdsPurchased
+                                      ? const _OwnedTag()
+                                      : Text(
+                                          removeAdsProduct?.price ?? '···',
+                                          style: AppTextStyles.display(
+                                            13,
+                                            weight: FontWeight.w600,
+                                            color: AppColors.textHi,
+                                          ),
+                                        ),
+                                  onTap: removeAdsPurchased
+                                      ? null
+                                      : () => _buyRemoveAds(context),
+                                ),
+                                SettingsRow(
+                                  label: 'Restore Purchases',
+                                  trailing: _isRestoring
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2),
+                                        )
+                                      : _chevron(),
+                                  onTap: _isRestoring
+                                      ? null
+                                      : () => _restorePurchases(context),
+                                ),
+                              ],
+                              SettingsRow(
+                                label: 'Manage Ad Preferences',
+                                trailing: _chevron(),
+                                // A no-op for players outside the EEA/UK, whose
+                                // region never required a consent form in the
+                                // first place - see AdService.
+                                // showPrivacyOptionsForm. Left visible
+                                // unconditionally rather than only for players
+                                // it applies to, since a GDPR consent form
+                                // itself only reaches EEA/UK players.
+                                onTap: () =>
+                                    AdService.instance.showPrivacyOptionsForm(),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 24),
+                        const SettingsSectionHeader('Data'),
+                        SettingsSectionCard(
+                          rows: [
+                            SettingsRow(
+                              label: 'Reset Progress',
+                              labelColor: AppColors.coral,
+                              trailing: Icon(Icons.chevron_right_rounded,
+                                  color:
+                                      AppColors.coral.withValues(alpha: 0.7)),
+                              onTap: () => _confirmResetProgress(context, ref),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        const SettingsSectionHeader('Share'),
+                        const SizedBox(height: 12),
+                        SettingsSectionCard(
+                          rows: [
+                            SettingsRow(
+                              label: 'Share Pairoma',
+                              subtitle: 'Invite friends to play',
+                              trailing: _isSharingApp
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : _chevron(),
+                              onTap: _isSharingApp ? null : _shareApp,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        const SettingsSectionHeader('About'),
+                        SettingsSectionCard(
+                          rows: [
+                            SettingsRow(
+                              label: 'Replay Tutorial',
+                              trailing: _chevron(),
+                              onTap: () => _replayTutorial(context),
+                            ),
+                            SettingsRow(
+                              label: 'Rate Pairoma',
+                              trailing: _chevron(),
+                              onTap: () => _rateApp(ref),
+                            ),
+                            SettingsRow(
+                              label: 'Send Feedback',
+                              trailing: _chevron(),
+                              onTap: () => _sendFeedback(context),
+                            ),
+                            // TODO(cross-promo): "More Games" row hidden until
+                            // there's a games-list screen (and other games) to
+                            // point it at - see doc/remaining-work.md.
+                            SettingsRow(
+                              label: 'Privacy Policy',
+                              trailing: _chevron(),
+                              onTap: () => _openPrivacyPolicy(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 28),
+                        Center(
+                          child: Text(
+                            _appVersion == null
+                                ? 'Adhroma Games'
+                                : 'Adhroma Games · $_appVersion',
+                            style: AppTextStyles.mono(
+                              10.5,
+                              weight: FontWeight.w500,
+                              color: AppColors.textLow,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: BottomNavBar(activeTab: HomeTab.settings),
+                ),
+              ],
+            ),
           ),
         ),
       ),

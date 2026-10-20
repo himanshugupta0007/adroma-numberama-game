@@ -5,7 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:numberama/game/numberama_game.dart';
 import 'package:numberama/state/game_state.dart';
+import 'package:numberama/state/preferences_service.dart';
 import 'package:numberama/ui/gameplay/power_bar.dart';
+
+import '../helpers/test_prefs_box.dart';
 
 /// Throwaway verification: confirms the power bar actually replays its
 /// "try me" zoom pulse after 3 consecutive misses, and does NOT after just
@@ -13,12 +16,18 @@ import 'package:numberama/ui/gameplay/power_bar.dart';
 void main() {
   testWidgets('power bar pulses shuffle/hint after 3 consecutive misses',
       (tester) async {
+    // PowerBar reads the saved power-up counts, so it needs a real box.
+    final box = await openTestPrefsBox();
+
     final notifier = GameStateNotifier();
     final game = NumberamaGame(gameStateNotifier: notifier);
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [gameStateProvider.overrideWith((ref) => notifier)],
+        overrides: [
+          preferencesBoxProvider.overrideWithValue(box),
+          gameStateProvider.overrideWith((ref) => notifier),
+        ],
         child: MaterialApp(
           home: Scaffold(
             body: Column(

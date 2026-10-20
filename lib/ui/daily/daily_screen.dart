@@ -9,6 +9,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner_widget.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
+import '../../widgets/max_width_box.dart';
 import '../../widgets/streak_summary_card.dart';
 import '../gameplay/gameplay_screen.dart';
 import '../home/bottom_nav_bar.dart';
@@ -90,78 +91,82 @@ class DailyScreen extends ConsumerWidget {
     return Scaffold(
       body: GraphPaperBackground(
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Daily challenge',
-                            style: AppTextStyles.display(19)),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            _formatDate(now).toUpperCase(),
-                            style: AppTextStyles.mono(11,
-                                weight: FontWeight.w600,
-                                color: AppColors.textLow),
+          child: MaxWidthBox(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Daily challenge',
+                              style: AppTextStyles.display(19)),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              _formatDate(now).toUpperCase(),
+                              style: AppTextStyles.mono(11,
+                                  weight: FontWeight.w600,
+                                  color: AppColors.textLow),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        StreakSummaryCard(days: prefs.currentStreak),
-                        const SizedBox(height: 18),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            for (var i = 0; i < 7; i++)
-                              _CalendarDay(
-                                letter: _dayLetters[i],
-                                state: i == todayIndex
-                                    ? (alreadyPlayed
-                                        ? _DayState.done
-                                        : _DayState.today)
-                                    : i < todayIndex &&
-                                            prefs.hasEverPlayedDailyOn(weekStart
-                                                .add(Duration(days: i)))
-                                        ? _DayState.done
-                                        : _DayState.future,
-                                label: i == todayIndex ? '${now.day}' : null,
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 22),
-                        _BoardCard(difficulty: difficulty, date: now),
-                        const SizedBox(height: 20),
-                        if (alreadyPlayed)
-                          _AlreadyPlayedNotice(unlockIn: nextUnlockIn)
-                        else
-                          GradientButton(
-                            label: "Start today's board",
-                            onPressed: () => _openGameplay(context, difficulty),
+                          const SizedBox(height: 14),
+                          StreakSummaryCard(days: prefs.currentStreak),
+                          const SizedBox(height: 18),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              for (var i = 0; i < 7; i++)
+                                _CalendarDay(
+                                  letter: _dayLetters[i],
+                                  state: i == todayIndex
+                                      ? (alreadyPlayed
+                                          ? _DayState.done
+                                          : _DayState.today)
+                                      : i < todayIndex &&
+                                              prefs.hasEverPlayedDailyOn(
+                                                  weekStart
+                                                      .add(Duration(days: i)))
+                                          ? _DayState.done
+                                          : _DayState.future,
+                                  label: i == todayIndex ? '${now.day}' : null,
+                                ),
+                            ],
                           ),
-                        const SizedBox(height: 14),
-                        Text(
-                          alreadyPlayed
-                              ? 'Next board unlocks in ${_formatCountdown(nextUnlockIn)}. '
-                                  'Miss a whole day and the streak resets — no undo.'
-                              : 'A new board unlocks every ${dailyCycleDuration.inHours} '
-                                  'hours. Miss a whole day and the streak resets — no undo.',
-                          style: AppTextStyles.display(
-                            11.5,
-                            weight: FontWeight.w400,
-                            color: AppColors.textLow,
-                          ).copyWith(fontStyle: FontStyle.italic),
-                        ),
-                      ],
+                          const SizedBox(height: 22),
+                          _BoardCard(difficulty: difficulty, date: now),
+                          const SizedBox(height: 20),
+                          if (alreadyPlayed)
+                            _AlreadyPlayedNotice(unlockIn: nextUnlockIn)
+                          else
+                            GradientButton(
+                              label: "Start today's board",
+                              onPressed: () =>
+                                  _openGameplay(context, difficulty),
+                            ),
+                          const SizedBox(height: 14),
+                          Text(
+                            alreadyPlayed
+                                ? 'Next board unlocks in ${_formatCountdown(nextUnlockIn)}. '
+                                    'Miss a whole day and the streak resets — no undo.'
+                                : 'A new board unlocks every ${dailyCycleDuration.inHours} '
+                                    'hours. Miss a whole day and the streak resets — no undo.',
+                            style: AppTextStyles.display(
+                              11.5,
+                              weight: FontWeight.w400,
+                              color: AppColors.textLow,
+                            ).copyWith(fontStyle: FontStyle.italic),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const Center(child: AdBannerWidget()),
-                const BottomNavBar(activeTab: HomeTab.daily),
-              ],
+                  const Center(child: AdBannerWidget()),
+                  const BottomNavBar(activeTab: HomeTab.daily),
+                ],
+              ),
             ),
           ),
         ),

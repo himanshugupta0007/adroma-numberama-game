@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../state/analytics_service.dart';
@@ -14,11 +15,11 @@ import '../state/analytics_service.dart';
 /// lifecycle instead, but still awaits [initialize] first (see that doc)
 /// before requesting one.
 ///
-/// Every ad unit ID below is Google's published *test* ID, safe to request
-/// against during development - they always serve real (if generic) test
-/// creatives, never real spend. Before release, swap these for the real
-/// ad unit IDs from the AdMob console, alongside the app-level test App IDs
-/// already flagged in `AndroidManifest.xml`/`Info.plist`.
+/// Android release builds use the real AdMob ad units; debug/profile builds
+/// and iOS use Google's published *test* IDs, which always serve generic
+/// test creatives. Keeping test IDs in debug matters - tapping a live ad on
+/// your own device counts as invalid traffic and can get the AdMob account
+/// suspended. (iOS ads are off entirely for now - see [AppConfig].)
 class AdService {
   AdService._();
 
@@ -29,17 +30,25 @@ class AdService {
   InterstitialAd? _interstitialAd;
   RewardedAd? _rewardedAd;
 
-  static String get bannerAdUnitId => Platform.isIOS
-      ? 'ca-app-pub-3940256099942544/2934735716'
-      : 'ca-app-pub-3940256099942544/6300978111';
+  static bool get _useLiveAndroidAds => kReleaseMode && Platform.isAndroid;
 
-  static String get _interstitialAdUnitId => Platform.isIOS
-      ? 'ca-app-pub-3940256099942544/4411468910'
-      : 'ca-app-pub-3940256099942544/1033173712';
+  static String get bannerAdUnitId => _useLiveAndroidAds
+      ? 'ca-app-pub-1034257317553808/1437644631'
+      : Platform.isIOS
+          ? 'ca-app-pub-3940256099942544/2934735716'
+          : 'ca-app-pub-3940256099942544/6300978111';
 
-  static String get _rewardedAdUnitId => Platform.isIOS
-      ? 'ca-app-pub-3940256099942544/1712485313'
-      : 'ca-app-pub-3940256099942544/5224354917';
+  static String get _interstitialAdUnitId => _useLiveAndroidAds
+      ? 'ca-app-pub-1034257317553808/5902513570'
+      : Platform.isIOS
+          ? 'ca-app-pub-3940256099942544/4411468910'
+          : 'ca-app-pub-3940256099942544/1033173712';
+
+  static String get _rewardedAdUnitId => _useLiveAndroidAds
+      ? 'ca-app-pub-1034257317553808/1694112156'
+      : Platform.isIOS
+          ? 'ca-app-pub-3940256099942544/1712485313'
+          : 'ca-app-pub-3940256099942544/5224354917';
 
   /// Gathers GDPR/UMP consent (showing the consent form if the player's
   /// region requires it), initializes the Mobile Ads SDK, and starts

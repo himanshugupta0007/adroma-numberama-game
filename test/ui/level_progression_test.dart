@@ -1,16 +1,15 @@
-import 'dart:io';
-
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 
 import 'package:numberama/game/numberama_game.dart';
 import 'package:numberama/game/tile_component.dart';
 import 'package:numberama/main.dart';
 import 'package:numberama/state/game_state.dart';
 import 'package:numberama/state/preferences_service.dart';
+
+import '../helpers/test_prefs_box.dart';
 
 /// Finds two currently-active tiles that would form a valid pair (equal
 /// value, or summing to 10), if any exist.
@@ -33,21 +32,14 @@ Future<void> _pumpFrames(WidgetTester tester, {int frames = 30}) async {
   }
 }
 
-int _testBoxCounter = 0;
-
 void main() {
   testWidgets(
       'clearing a real Classic pair through the live app awards XP, and the '
       'level pill/home badge both reflect it', (tester) async {
-    final tempDir = await Directory.systemTemp.createTemp('numberama_test_');
-    Hive.init(tempDir.path);
-    final box = await Hive.openBox('level_progression_${_testBoxCounter++}');
-    addTearDown(() async {
-      await box.close();
-      await tempDir.delete(recursive: true);
+    final box = await openTestPrefsBox(initial: {
+      'has_seen_how_to_play': true,
+      'has_seen_onboarding': true,
     });
-    await box.put('has_seen_how_to_play', true);
-    await box.put('has_seen_onboarding', true);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -104,6 +96,15 @@ void main() {
     await tester.tap(find.text('Leave'));
     await _pumpFrames(tester, frames: 40);
 
-    expect(find.textContaining('LEVEL 1'), findsOneWidget);
+    // The badge renders the "LEVEL" caption and the number as separate
+    // texts inside the home screen's (private) _LevelBadge.
+    final badge = find.byWidgetPredicate(
+      (w) => w.runtimeType.toString() == '_LevelBadge',
+    );
+    expect(badge, findsOneWidget);
+    expect(find.descendant(of: badge, matching: find.text('LEVEL')),
+        findsOneWidget);
+    expect(find.descendant(of: badge, matching: find.text('1')),
+        findsOneWidget);
   });
 }

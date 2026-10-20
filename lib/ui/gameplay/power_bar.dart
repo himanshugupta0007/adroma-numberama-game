@@ -14,7 +14,7 @@ import '../../widgets/message_dialog.dart';
 /// The power-up strip: shuffle, hint, and clear-row. Each use spends one
 /// from the persisted inventory ([PreferencesService.powerUpCount]); once a
 /// slot hits 0 it's ad-gated, or disabled entirely while
-/// [AppConfig.adsAndPurchasesEnabled] is off. Clear-row never uses inventory
+/// [AppConfig.adsEnabled] is off. Clear-row never uses inventory
 /// in the Daily Challenge (see [GameState.clearRowAvailable]).
 /// All three slots also pulse a "try me" nudge every 3 consecutive invalid
 /// taps, in case the player's stuck and hasn't noticed them.
@@ -108,7 +108,7 @@ class _PowerBarState extends ConsumerState<PowerBar> {
 
     // With ads off there's no way to earn another use, so an empty slot is
     // disabled outright rather than offering an ad (or a free grant).
-    const adsEnabled = AppConfig.adsAndPurchasesEnabled;
+    final adsEnabled = AppConfig.adsEnabled;
 
     // Spends one from inventory if the player has any, otherwise falls back
     // to the rewarded ad. Never reached for an empty slot while ads are off -

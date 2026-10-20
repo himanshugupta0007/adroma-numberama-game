@@ -5,6 +5,7 @@ import '../../state/game_mode.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/graph_paper_background.dart';
+import '../../widgets/max_width_box.dart';
 import '../gameplay/gameplay_screen.dart';
 import 'difficulty_style.dart';
 
@@ -40,31 +41,33 @@ class ClassicDifficultyScreen extends StatelessWidget {
       body: GraphPaperBackground(
         child: SafeArea(
           top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pick a pace for your Classic round.',
-                  style: AppTextStyles.display(12.5,
-                      weight: FontWeight.w400, color: AppColors.textMid),
-                ),
-                const SizedBox(height: 18),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: Difficulty.values.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 14),
-                    itemBuilder: (context, index) {
-                      final difficulty = Difficulty.values[index];
-                      return _DifficultyOptionCard(
-                        difficulty: difficulty,
-                        onTap: () => _start(context, difficulty),
-                      );
-                    },
+          child: MaxWidthBox(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pick a pace for your Classic round.',
+                    style: AppTextStyles.display(12.5,
+                        weight: FontWeight.w400, color: AppColors.textMid),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 18),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: Difficulty.values.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 14),
+                      itemBuilder: (context, index) {
+                        final difficulty = Difficulty.values[index];
+                        return _DifficultyOptionCard(
+                          difficulty: difficulty,
+                          onTap: () => _start(context, difficulty),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -131,7 +134,8 @@ class _DifficultyOptionCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(difficulty.label, style: AppTextStyles.display(16)),
+                        Text(difficulty.label,
+                            style: AppTextStyles.display(16)),
                         const SizedBox(height: 4),
                         Text(
                           _description(difficulty),
@@ -142,7 +146,8 @@ class _DifficultyOptionCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: AppColors.textLow),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.textLow),
                 ],
               ),
               const SizedBox(height: 14),
@@ -152,7 +157,8 @@ class _DifficultyOptionCard extends StatelessWidget {
                     child: _StatChip(
                       icon: Icons.timer_outlined,
                       label: 'New row every',
-                      value: '${difficulty.autoRowIntervalSeconds.toStringAsFixed(0)}s',
+                      value:
+                          '${difficulty.autoRowIntervalSeconds.toStringAsFixed(0)}s',
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -203,8 +209,7 @@ class _StatChip extends StatelessWidget {
                   weight: FontWeight.w400, color: AppColors.textLow),
             ),
           ),
-          Text(value,
-              style: AppTextStyles.mono(11.5, color: AppColors.textHi)),
+          Text(value, style: AppTextStyles.mono(11.5, color: AppColors.textHi)),
         ],
       ),
     );

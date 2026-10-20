@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'config/app_config.dart';
+import 'config/feature_flags.dart';
 import 'firebase_options.dart';
 import 'services/ad_service.dart';
 import 'services/notification_service.dart';
@@ -17,6 +18,10 @@ import 'ui/onboarding/onboarding_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Draw behind the status and navigation bars (the Android 15+ default);
+  // every screen keeps its content inside a SafeArea.
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(AppTheme.systemOverlayStyle);
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -27,10 +32,12 @@ Future<void> main() async {
   final prefs = PreferencesService(box);
   prefs.registerAppOpened();
 
-  if (AppConfig.adsAndPurchasesEnabled) {
+  if (AppConfig.adsEnabled) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AdService.instance.initialize();
-      PurchaseService.instance.initialize(prefs);
+      if (FeatureFlags.iapEnabled) {
+        PurchaseService.instance.initialize(prefs);
+      }
     });
   }
 

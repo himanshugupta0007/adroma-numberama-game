@@ -9,6 +9,7 @@ import '../state/achievement_queue.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/gradient_button.dart';
+import '../widgets/max_width_box.dart';
 
 /// Confetti-backed celebration for whatever's at the front of
 /// [achievementQueueProvider] - a level-up today, a badge unlock later (see
@@ -115,7 +116,8 @@ class _AchievementToastState extends ConsumerState<AchievementToast> {
     // every build catches both that already-there case and any later
     // change the same way.
     final front = ref.watch(
-      achievementQueueProvider.select((queue) => queue.isEmpty ? null : queue.first),
+      achievementQueueProvider
+          .select((queue) => queue.isEmpty ? null : queue.first),
     );
     if (!widget.active) return const SizedBox.shrink();
     if (front == null && _shown == null && !_reportedDone) {
@@ -211,6 +213,7 @@ class _LevelUpDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+      constraints: const BoxConstraints(maxWidth: MaxWidthBox.dialog),
       child: Container(
         padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
         decoration: BoxDecoration(

@@ -1,10 +1,7 @@
-import 'dart:io';
-
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 
 import 'package:numberama/game/numberama_game.dart';
 import 'package:numberama/game/tile_component.dart';
@@ -13,6 +10,8 @@ import 'package:numberama/state/game_state.dart';
 import 'package:numberama/state/preferences_service.dart';
 import 'package:numberama/ui/results/results_screen.dart';
 import 'package:numberama/widgets/gradient_button.dart';
+
+import '../helpers/test_prefs_box.dart';
 
 /// Finds two currently-active tiles that would form a valid pair (equal
 /// value, or summing to 10), if any exist.
@@ -43,10 +42,12 @@ Future<void> _pumpFrames(WidgetTester tester, {int frames = 30}) async {
   }
 }
 
-/// Bumped per call so each test's Hive box gets a unique name - Hive keeps
-/// open boxes cached by name for the life of the test process, so reusing
-/// one across tests (even backed by a fresh temp dir) would leak state.
-int _testBoxCounter = 0;
+/// Taps OK on the round-end card shown after a win or loss - the results
+/// screen only opens once it's dismissed.
+Future<void> _dismissRoundEnd(WidgetTester tester) async {
+  await tester.tap(find.widgetWithText(GradientButton, 'OK'));
+  await _pumpFrames(tester, frames: 40);
+}
 
 /// Navigates from Home to a real Gameplay round and returns the live game
 /// plus its provider container. Defaults the "How to Play" tutorial to
@@ -58,16 +59,11 @@ Future<(NumberamaGame, ProviderContainer)> _openGameplay(
   bool hasSeenHowToPlay = true,
   int bestScore = 0,
 }) async {
-  final tempDir = await Directory.systemTemp.createTemp('numberama_test_');
-  Hive.init(tempDir.path);
-  final box = await Hive.openBox('prefs_${_testBoxCounter++}');
-  addTearDown(() async {
-    await box.close();
-    await tempDir.delete(recursive: true);
+  final box = await openTestPrefsBox(initial: {
+    'has_seen_how_to_play': hasSeenHowToPlay,
+    'has_seen_onboarding': true,
+    'best_score': bestScore,
   });
-  await box.put('has_seen_how_to_play', hasSeenHowToPlay);
-  await box.put('has_seen_onboarding', true);
-  await box.put('best_score', bestScore);
 
   await tester.pumpWidget(
     ProviderScope(
@@ -156,6 +152,7 @@ void main() {
     // Let the post-frame navigation callback (GamePhase.won -> Results)
     // fire and the route transition complete.
     await _pumpFrames(tester, frames: 40);
+    await _dismissRoundEnd(tester);
 
     expect(find.byType(ResultsScreen), findsOneWidget);
     final results = tester.widget<ResultsScreen>(find.byType(ResultsScreen));
@@ -179,6 +176,7 @@ void main() {
 
     container.read(gameStateProvider.notifier).setPhase(GamePhase.won);
     await _pumpFrames(tester, frames: 40);
+    await _dismissRoundEnd(tester);
 
     final results = tester.widget<ResultsScreen>(find.byType(ResultsScreen));
     expect(results.isNewBest, isTrue);
@@ -200,6 +198,7 @@ void main() {
 
     container.read(gameStateProvider.notifier).setPhase(GamePhase.won);
     await _pumpFrames(tester, frames: 40);
+    await _dismissRoundEnd(tester);
 
     final results = tester.widget<ResultsScreen>(find.byType(ResultsScreen));
     expect(results.isNewBest, isFalse);
@@ -222,6 +221,7 @@ void main() {
 
     container.read(gameStateProvider.notifier).setPhase(GamePhase.lost);
     await _pumpFrames(tester, frames: 40);
+    await _dismissRoundEnd(tester);
 
     expect(find.byType(ResultsScreen), findsOneWidget);
     final results = tester.widget<ResultsScreen>(find.byType(ResultsScreen));
@@ -289,6 +289,8 @@ void main() {
     expect(find.text('How to Play'), findsOneWidget);
     expect(game.paused, isTrue);
 
+    await tester.ensureVisible(find.widgetWithText(GradientButton, 'Got it'));
+    await tester.pump();
     await tester.tap(find.widgetWithText(GradientButton, 'Got it'));
     await _pumpFrames(tester, frames: 40);
 
@@ -311,6 +313,8 @@ void main() {
     expect(find.text('How to Play'), findsOneWidget);
     expect(game.paused, isTrue);
 
+    await tester.ensureVisible(find.widgetWithText(GradientButton, 'Got it'));
+    await tester.pump();
     await tester.tap(find.widgetWithText(GradientButton, 'Got it'));
     await _pumpFrames(tester, frames: 40);
 

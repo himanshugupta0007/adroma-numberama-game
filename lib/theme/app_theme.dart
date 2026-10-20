@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app_colors.dart';
 import 'app_text_styles.dart';
@@ -15,6 +16,20 @@ class AppTheme {
   static const _borderRadius = 12.0;
   static const _ghostBorderColor = Color(0x24FFFFFF); // rgba(255,255,255,0.14)
 
+  /// Transparent status and navigation bars so the background draws
+  /// edge-to-edge behind them (enforced on Android 15+), with light icons
+  /// to match the dark theme. Applied once in `main()` and again through
+  /// [AppBarTheme] so a screen with an [AppBar] doesn't override it.
+  static const systemOverlayStyle = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark, // iOS: dark bar => light icons
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.light,
+    systemNavigationBarContrastEnforced: false,
+  );
+
   static ThemeData dark() {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: AppColors.amber,
@@ -29,6 +44,7 @@ class AppTheme {
       brightness: Brightness.dark,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.bgNavy,
+      appBarTheme: const AppBarTheme(systemOverlayStyle: systemOverlayStyle),
       textTheme: _textTheme,
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

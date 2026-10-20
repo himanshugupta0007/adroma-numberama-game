@@ -12,6 +12,7 @@ import '../../widgets/ad_banner_widget.dart';
 import '../../widgets/dialog_card.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
+import '../../widgets/max_width_box.dart';
 import '../../widgets/wordmark_icon.dart';
 import 'bottom_nav_bar.dart';
 import 'classic_difficulty_screen.dart';
@@ -104,90 +105,93 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       body: GraphPaperBackground(
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-            child: Column(
-              children: [
-                // Fixed at the top, outside the centered section below - the
-                // wordmark header shouldn't drift toward the middle of the
-                // screen along with the mode cards.
-                Column(
-                  children: [
-                    const SizedBox(height: 8),
-                    const WordmarkIcon(size: 64),
-                    const SizedBox(height: 8),
-                    Text('PAIROMA',
-                        style:
-                            AppTextStyles.display(36, weight: FontWeight.w800)),
-                    const SizedBox(height: 4),
-                    Text('TAP · SUM · CLEAR', style: AppTextStyles.caption),
-                  ],
-                ),
-                Expanded(
-                  child: Center(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          // Hidden for a player who has never finished a
-                          // Classic round - everyone is technically "Level
-                          // 1" from totalXp == 0, so that (not a level
-                          // number) is what gates first-time visibility.
-                          // The Daily Challenge never contributes XP (see
-                          // GameState.difficulty's doc), so this reflects
-                          // Classic progress only. Shown above the score
-                          // section - progression is the more prominent,
-                          // ever-climbing number, so it leads.
-                          if (prefs.totalXp > 0) ...[
-                            _LevelBadge(level: calculateLevel(prefs.totalXp)),
-                            const SizedBox(height: 18),
-                          ],
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _PeriodScoreChip(
-                                  label: "Today's",
-                                  score: prefs.todayBestScore,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _PeriodScoreChip(
-                                  label: HomeScreen._monthNames[now.month - 1],
-                                  score: prefs.monthBestScore,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _PeriodScoreChip(
-                                  label: '${now.year}',
-                                  score: prefs.yearBestScore,
-                                ),
-                              ),
+          child: MaxWidthBox(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Column(
+                children: [
+                  // Fixed at the top, outside the centered section below - the
+                  // wordmark header shouldn't drift toward the middle of the
+                  // screen along with the mode cards.
+                  Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      const WordmarkIcon(size: 64),
+                      const SizedBox(height: 8),
+                      Text('PAIROMA',
+                          style: AppTextStyles.display(36,
+                              weight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Text('TAP · SUM · CLEAR', style: AppTextStyles.caption),
+                    ],
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            // Hidden for a player who has never finished a
+                            // Classic round - everyone is technically "Level
+                            // 1" from totalXp == 0, so that (not a level
+                            // number) is what gates first-time visibility.
+                            // The Daily Challenge never contributes XP (see
+                            // GameState.difficulty's doc), so this reflects
+                            // Classic progress only. Shown above the score
+                            // section - progression is the more prominent,
+                            // ever-climbing number, so it leads.
+                            if (prefs.totalXp > 0) ...[
+                              _LevelBadge(level: calculateLevel(prefs.totalXp)),
+                              const SizedBox(height: 18),
                             ],
-                          ),
-                          const SizedBox(height: 18),
-                          _BestEverCard(score: prefs.bestScore),
-                          const SizedBox(height: 18),
-                          ModeCard(
-                            icon: Icons.grid_view_rounded,
-                            iconColor: AppColors.amber,
-                            title: 'Classic',
-                            description:
-                                'Clear the grid before it fills up. No clock, just pressure.',
-                            action: GradientButton(
-                              label: 'Play Classic',
-                              onPressed: () =>
-                                  _openClassicDifficultyPicker(context),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _PeriodScoreChip(
+                                    label: "Today's",
+                                    score: prefs.todayBestScore,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _PeriodScoreChip(
+                                    label:
+                                        HomeScreen._monthNames[now.month - 1],
+                                    score: prefs.monthBestScore,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _PeriodScoreChip(
+                                    label: '${now.year}',
+                                    score: prefs.yearBestScore,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 18),
+                            _BestEverCard(score: prefs.bestScore),
+                            const SizedBox(height: 18),
+                            ModeCard(
+                              icon: Icons.grid_view_rounded,
+                              iconColor: AppColors.amber,
+                              title: 'Classic',
+                              description:
+                                  'Clear the grid before it fills up. No clock, just pressure.',
+                              action: GradientButton(
+                                label: 'Play Classic',
+                                onPressed: () =>
+                                    _openClassicDifficultyPicker(context),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const Center(child: AdBannerWidget()),
-                const BottomNavBar(),
-              ],
+                  const Center(child: AdBannerWidget()),
+                  const BottomNavBar(),
+                ],
+              ),
             ),
           ),
         ),

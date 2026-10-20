@@ -9,6 +9,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/demo_tile.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
+import '../../widgets/max_width_box.dart';
 import '../home/home_screen.dart';
 
 /// Three-slide animated walkthrough of the one rule the whole game hinges
@@ -70,57 +71,59 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     return Scaffold(
       body: GraphPaperBackground(
         child: SafeArea(
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: _SkipButton(onTap: _finish),
-                ),
-              ),
-              Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  onPageChanged: (page) => setState(() => _page = page),
-                  children: const [
-                    _OnboardingPage(
-                      title: 'Match Same Numbers',
-                      body: 'Tap two tiles showing the same number to '
-                          'clear them.',
-                      animation: _PairMatchAnimation(valueA: 7, valueB: 7),
-                    ),
-                    _OnboardingPage(
-                      title: 'Or Make a 10',
-                      body: 'Two tiles that add up to 10 - like 4 and 6 -'
-                          ' clear too.',
-                      animation: _PairMatchAnimation(
-                        valueA: 4,
-                        valueB: 6,
-                        sumBadge: '4 + 6 = 10',
-                      ),
-                    ),
-                    _OnboardingPage(
-                      title: 'Clear It Before It Reaches the Top',
-                      body: 'New rows keep rising. Clear tiles faster than '
-                          'the stack grows to win the round.',
-                      animation: _ClearBoardAnimation(),
-                    ),
-                  ],
-                ),
-              ),
-              _PageDots(count: _pageCount, current: _page),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(32, 20, 32, 28),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: GradientButton(
-                    label: isLast ? "Let's Play" : 'Next',
-                    onPressed: _handleNext,
+          child: MaxWidthBox(
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: _SkipButton(onTap: _finish),
                   ),
                 ),
-              ),
-            ],
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    onPageChanged: (page) => setState(() => _page = page),
+                    children: const [
+                      _OnboardingPage(
+                        title: 'Match Same Numbers',
+                        body: 'Tap two tiles showing the same number to '
+                            'clear them.',
+                        animation: _PairMatchAnimation(valueA: 7, valueB: 7),
+                      ),
+                      _OnboardingPage(
+                        title: 'Or Make a 10',
+                        body: 'Two tiles that add up to 10 - like 4 and 6 -'
+                            ' clear too.',
+                        animation: _PairMatchAnimation(
+                          valueA: 4,
+                          valueB: 6,
+                          sumBadge: '4 + 6 = 10',
+                        ),
+                      ),
+                      _OnboardingPage(
+                        title: 'Clear It Before It Reaches the Top',
+                        body: 'New rows keep rising. Clear tiles faster than '
+                            'the stack grows to win the round.',
+                        animation: _ClearBoardAnimation(),
+                      ),
+                    ],
+                  ),
+                ),
+                _PageDots(count: _pageCount, current: _page),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 20, 32, 28),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: GradientButton(
+                      label: isLast ? "Let's Play" : 'Next',
+                      onPressed: _handleNext,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

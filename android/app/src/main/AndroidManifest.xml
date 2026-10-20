@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
+        android:appCategory="game"
         android:label="Pairoma"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
@@ -39,12 +40,12 @@
             android:value="2" />
 
         <!-- AdMob app ID, required by the SDK before any ad is requested.
-             This is Google's published *test* App ID - swap it for the real
-             one from the AdMob console (Apps > App settings) before release,
-             or every ad request will keep serving as test inventory. -->
+             This is the real Pairoma Android App ID from the AdMob console.
+             Debug builds still request Google's test ad units (see
+             AdService), so they serve test ads even with this real ID. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="ca-app-pub-1034257317553808~1603719067"/>
 
         <!-- flutter_local_notifications: redelivers a scheduled notification
              when its fire time arrives, and re-registers pending ones after

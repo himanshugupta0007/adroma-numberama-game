@@ -15,6 +15,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/dialog_card.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/graph_paper_background.dart';
+import '../../widgets/max_width_box.dart';
 import '../results/results_screen.dart';
 import 'how_to_play_dialog.dart';
 import 'power_bar.dart';
@@ -264,45 +265,48 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
       child: Scaffold(
         body: GraphPaperBackground(
           child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              child: Column(
-                children: [
-                  _TopBar(
-                    pillLabel: widget.isDaily
-                        ? 'Daily · ${widget.difficulty.label}'
-                        : '${widget.mode.pillLabel} · ${widget.difficulty.label}',
-                    onBack: _confirmExit,
-                    onHelp: _showHowToPlay,
-                    onPause: _pause,
-                  ),
-                  const SizedBox(height: 16),
-                  _ScoreRow(isDaily: widget.isDaily),
-                  Expanded(
-                    child: Padding(
-                      // Symmetric on purpose: keeps the board equidistant
-                      // from the score row above and the power bar below on
-                      // every screen height, rather than one gap silently
-                      // ending up bigger than the other.
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Stack(
-                        children: [
-                          Positioned.fill(child: GameWidget(game: _game)),
-                          Positioned.fill(
-                            child: SumArcOverlay(
-                              selectionManager: _game.selectionManager,
+            child: MaxWidthBox(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Column(
+                  children: [
+                    _TopBar(
+                      pillLabel: widget.isDaily
+                          ? 'Daily · ${widget.difficulty.label}'
+                          : '${widget.mode.pillLabel} · ${widget.difficulty.label}',
+                      onBack: _confirmExit,
+                      onHelp: _showHowToPlay,
+                      onPause: _pause,
+                    ),
+                    const SizedBox(height: 16),
+                    _ScoreRow(isDaily: widget.isDaily),
+                    Expanded(
+                      child: Padding(
+                        // Symmetric on purpose: keeps the board equidistant
+                        // from the score row above and the power bar below on
+                        // every screen height, rather than one gap silently
+                        // ending up bigger than the other.
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(child: GameWidget(game: _game)),
+                            Positioned.fill(
+                              child: SumArcOverlay(
+                                selectionManager: _game.selectionManager,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  PowerBar(
-                    selectionManager: _game.selectionManager,
-                    onAdWillShow: _game.pauseEngine,
-                    onAdClosed: _game.resumeEngine,
-                  ),
-                ],
+                    PowerBar(
+                      selectionManager: _game.selectionManager,
+                      onAdWillShow: _game.pauseEngine,
+                      onAdClosed: _game.resumeEngine,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -360,16 +364,27 @@ class _TopBar extends StatelessWidget {
           icon: Icons.chevron_left_rounded,
           onPressed: onBack,
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceRaised,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            pillLabel,
-            style: AppTextStyles.mono(16,
-                weight: FontWeight.w600, color: AppColors.textMid),
+        // Shrinks to fit instead of overflowing on narrow phones or with a
+        // large system font size; unchanged whenever there's room.
+        Flexible(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceRaised,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  pillLabel,
+                  style: AppTextStyles.mono(16,
+                      weight: FontWeight.w600, color: AppColors.textMid),
+                ),
+              ),
+            ),
           ),
         ),
         Row(
@@ -711,6 +726,7 @@ class _RoundEndOverlayState extends State<_RoundEndOverlay>
           ),
         ),
         child: Container(
+          constraints: const BoxConstraints(maxWidth: MaxWidthBox.dialog),
           margin: const EdgeInsets.symmetric(horizontal: 40),
           padding: const EdgeInsets.fromLTRB(28, 24, 28, 22),
           decoration: BoxDecoration(
